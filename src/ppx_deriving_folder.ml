@@ -136,6 +136,7 @@ let rec exprsn names quoter typs =
         Some (app f [evar (argn i)]))
 
 and expr_of_typ names quoter typ =
+  let fold_pass = [%expr fun _ x -> x] in (* 'do nothing' fold-routine *)
   let expr_of_typ : core_type -> expression option = expr_of_typ names quoter in
   match attr_fold typ.ptyp_attributes with
   | Some fn -> Some (Ppx_deriving.quote quoter fn)
@@ -152,7 +153,13 @@ and expr_of_typ names quoter typ =
       end
     | { ptyp_desc = Ptyp_constr ({ txt = (Lident name) }, args) } when List.mem name names ->
       let fold_fn = Exp.field (evar "self") (mknoloc (Ppx_deriving.mangle_lid (`Prefix "fold") (Lident name))) in
-      Some [%expr [%e fold_fn] self]
+
+      (* select the approppriate fold_routines for arguments and pass them through *)
+      let arg_folds = args |> List.map
+                        (fun ct -> match expr_of_typ ct with Some e -> ("", e) | None -> ("", fold_pass))
+      in
+      if arg_folds = [] then Some [%expr [%e fold_fn] self] else
+        Some [%expr [%e Exp.apply fold_fn arg_folds] self]
     | _ -> None
       
 type folder = {
@@ -177,7 +184,7 @@ let rec gather_vars_ct vars = function
 and gather_vars vars decl = gather_vars_ct vars decl.ptype_params
 
 let polymorphize arg ct =
-  [%type: ([%t arg], [%t ct]) fold_routine]
+  [%type: [%t ct] -> [%t arg] -> [%t arg]]
       
 let rec reduce_fold_seq = function
     [] -> [%expr fun x -> x] (* default serial fold *)
@@ -240,7 +247,7 @@ let process_decl quoter fold_arg_t
         
     | _ -> lift_fold None
   in
-  let defaults = (mknoloc (Lident default_var), default_fold)::defaults in
+  let defaults = (mknoloc (Lident default_var), (poly_fun_of_type_decl type_decl default_fold))::defaults in
 
   let params = type_decl.ptype_params |> (List.map (fun (ct,_) -> ct)) in 
   let folded =Typ.constr (mknoloc (Lident type_decl.ptype_name.txt)) params in
