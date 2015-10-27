@@ -135,6 +135,9 @@ let rec exprsn names quoter typs =
       | Some f ->  
         Some (app f [evar (argn i)]))
 
+(* generate the fold routine for a given type. 
+   Since we might be able to optimize it, in case of unknown types, returns None
+   (the identity fold is only used when necessary) *)
 and expr_of_typ names quoter typ =
   let fold_pass = [%expr fun _ x -> x] in (* 'do nothing' fold-routine *)
   let expr_of_typ : core_type -> expression option = expr_of_typ names quoter in
@@ -142,15 +145,18 @@ and expr_of_typ names quoter typ =
   | Some fn -> Some (Ppx_deriving.quote quoter fn)
   | None ->
     match typ with
+    (* Lists can be folded directly *)
     | [%type: [%t? typ] list] -> begin match expr_of_typ typ with
         | None -> None
         | Some e -> Some [%expr List.fold_right [%e e]]
       end
+    (* Dito for arrays *)
     | [%type: [%t? typ] array] ->
       begin match expr_of_typ typ with
         | None -> None
         | Some e -> Some [%expr Array.fold_right [%e e]]
       end
+    (* A known constructor (i.e. the name appears in the names arg) *)
     | { ptyp_desc = Ptyp_constr ({ txt = (Lident name) }, args) } when List.mem name names ->
       let fold_fn = Exp.field (evar "self") (mknoloc (Ppx_deriving.mangle_lid (`Prefix "fold") (Lident name))) in
 

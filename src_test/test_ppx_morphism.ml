@@ -123,17 +123,43 @@ module PolyTest = struct
             | App of app
             | Let of expr binding
             | Var of string
-
+            | Int of int
+  
   and abs =  { abs_var : string; abs_rhs : expr }
+
+  and app = { lhs : expr; rhs : expr }
 
   and 'a binding = { var : string ; rhs : 'a; bdy : expr }
                    [@@deriving folder]
 end
 
+let filter x fvs = List.filter (fun y -> not (y = x)) fvs
+let cons x xs = x::xs
+
+open PolyTest
+    
+let fv_folder = { identity with
+                  fold_binding =
+                    (fun f self {var;rhs;bdy} ->
+                      self.fold_expr self bdy %>
+                      filter var %>
+                      f rhs ) ;
+                  on_expr = { identity.on_expr with fold_Var = (fun self -> cons) }
+                }
+
+let fv e = fv_folder.fold_expr fv_folder e []
+
+let test_poly_fv ctxt = 
+  assert_equal ~printer:show_fvs ["z"] (fv (Var "z")) ;
+  assert_equal ~printer:show_fvs ["t"] (fv (Let {var="s"; rhs=Int 0; bdy = App {lhs = Var "t"; rhs = Var "s"}})) ;
+  assert_equal ~printer:show_fvs ["x"] (fv (Abs {var="y"; rhs=(); bdy = App {lhs = Var "x"; rhs = Var "y"}})) ;
+  assert_equal ~printer:show_fvs [] (fv (Let{var="a"; rhs=Int 0; bdy=Abs {var="b"; rhs = (); bdy= App {lhs = Var "a"; rhs = Var "b"}}})) 
+
 let suite = "Test ppx_morphism" >::: [
     "test_int_record" >:: test_int_record ;
     "test_float_record" >:: test_float_record ;
     "test_fv" >:: test_fv ;
+    "test_poly_fv" >:: test_poly_fv ;
   ]
 
 let _ =
