@@ -156,6 +156,10 @@ and expr_of_typ names quoter typ =
         | None -> None
         | Some e -> Some [%expr Array.fold_right [%e e]]
       end
+    (* For variables, we expect the corresponding fold function as an argument *)
+    | { ptyp_desc = Ptyp_var x } ->
+      Some (Exp.ident (mknoloc (Lident ("poly_" ^ x))))
+      
     (* A known constructor (i.e. the name appears in the names arg) *)
     | { ptyp_desc = Ptyp_constr ({ txt = (Lident name) }, args) } when List.mem name names ->
       let fold_fn = Exp.field (evar "self") (mknoloc (Ppx_deriving.mangle_lid (`Prefix "fold") (Lident name))) in
