@@ -38,7 +38,7 @@ module Test1 = struct
 
   and bar = { lhs : baz; rhs : foo}
             
-  and baz = Foo of foo | Bar of bar [@@deriving folder]
+  and baz = Foo of foo | Bar of bar [@@deriving folder,mapper]
 
 (* expected: 
      type 'a folder = {
@@ -78,6 +78,12 @@ module Test1 = struct
   let test_float_record ctxt =
     assert_equal ~printer:string_of_float 3. (float_sum.fold_foo float_sum {x=2;y=1} 0.0) ;
     assert_equal ~printer:string_of_float 42. (float_sum.fold_baz float_sum (Bar {lhs=Foo{x=1;y=1}; rhs={x=0;y=40}}) 0.)
+
+  let zero = { map_identity with map_foo = (fun self _ -> {x=0;y=0}) }
+
+  let test_zero ctxt =
+    assert_equal {x=0;y=0} (zero.map_foo zero {x=42;y=23}) 
+
 end 
 
 type fvs = string list [@@deriving show]
@@ -202,6 +208,7 @@ end
 let suite = "Test ppx_morphism" >::: [
     "test_int_record" >:: Test1.test_int_record ;
     "test_float_record" >:: Test1.test_float_record ;
+    "test zero mapper" >:: Test1.test_zero ;
     "test fv" >:: Test2.test ;
     "test poly fv" >:: PolyTest.test ;
     "test poly recursive fv" >:: PolyRecTest.test ;    

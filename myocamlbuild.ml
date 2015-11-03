@@ -18,6 +18,7 @@ let () = dispatch (
       A"-I"; A ppx_loc ;
       A"-ppx"; A("ocamlfind ppx_deriving/ppx_deriving "^
                  "src/ppx_deriving_folder.cma "^
+                 "src/ppx_deriving_mapper.cma "^
                  (std_deriver "ppx_deriving_show.cma")) ;
        ]; 
   | _ -> ())

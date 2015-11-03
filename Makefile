@@ -4,7 +4,7 @@ build:
 
 derive = $(shell ocamlfind query ppx_deriving.show)
 dry_run: build
-	ocamlfind ppx_tools/rewriter "ocamlfind ppx_deriving/ppx_deriving ${derive}/ppx_deriving_show.cma _build/src/ppx_deriving_folder.cma" src_test/test_ppx_morphism.ml
+	ocamlfind ppx_tools/rewriter "ocamlfind ppx_deriving/ppx_deriving ${derive}/ppx_deriving_show.cma _build/src/ppx_deriving_folder.cma _build/src/ppx_deriving_mapper.cma" src_test/test_ppx_morphism.ml
 
 test: build
 	rm -rf _build/src_test/

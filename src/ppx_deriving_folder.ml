@@ -43,9 +43,10 @@
 
     type ('a,'b) fold_fn = ('a t_folder) -> 'b -> 'a -> 'a
 
-    and 'a folder = { t : 'a t_folder ; 
-                      bar : 'a bar_folder }
-
+    and 'a folder = { on_t : 'a t_folder ; 
+                      on_bar : 'a bar_folder 
+                    }
+    
     and 'a t_folder = { fold_foo : ('a,foo) fold_fn ;
                         fold_bar : ('a,bar) fold_fn }
 
