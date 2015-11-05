@@ -104,7 +104,7 @@ module Test2 = struct
   and app = { lhs : expr; rhs : expr }
 
   and let_ = {let_var : string; let_bdy : expr ; let_rhs : expr}
-    [@@deriving folder]  
+    [@@deriving folder, mapper]  
                 
   let fv_folder = { identity with fold_abs = (fun self {abs_var; abs_rhs} -> self.fold_expr self abs_rhs %> (filter abs_var)) ;
                                   fold_let_ = (fun self {let_var; let_bdy; let_rhs} ->
@@ -116,10 +116,27 @@ module Test2 = struct
 
   let fv e = fv_folder.fold_expr fv_folder e []
 
+  let upper_case_mapper = { map_identity with on_expr = { map_identity.on_expr with map_Var = fun _ x -> Var (String.uppercase x) ;} ;
+                                              map_abs = ( fun self {abs_var; abs_rhs} -> {abs_rhs = self.map_expr self abs_rhs ;
+                                                                                          abs_var = String.uppercase abs_var } ) ;
+                                              map_let_= ( fun self {let_var; let_bdy; let_rhs} ->
+                                                          { let_var = String.uppercase let_var ;
+                                                            let_bdy = self.map_expr self let_bdy ;
+                                                            let_rhs = self.map_expr self let_rhs } ) ;
+                          }
+
+  let upper_case = upper_case_mapper.map_expr upper_case_mapper 
+  
   let test ctxt = 
     assert_equal ~printer:show_fvs ["x"] (fv (Var "x")) ;
     assert_equal ~printer:show_fvs ["x"] (fv (Abs {abs_var="y"; abs_rhs = App {lhs = Var "x"; rhs = Var "y"}})) ;
     assert_equal ~printer:show_fvs [] (fv (Let {let_var="x"; let_rhs=Int 0; let_bdy=Abs {abs_var="y"; abs_rhs = App {lhs = Var "x"; rhs = Var "y"}}})) 
+
+  let test_mapper ctxt =
+    assert_equal ~printer:show_fvs ["X"] (fv (upper_case (Var "x"))) ;    
+    assert_equal ~printer:show_fvs ["X"] (fv (upper_case (Abs {abs_var="y"; abs_rhs = App {lhs = Var "x"; rhs = Var "y"}}))) ;
+    assert_equal ~printer:show_fvs [] (fv (upper_case (Let {let_var="x"; let_rhs=Int 0; let_bdy=Abs {abs_var="y"; abs_rhs = App {lhs = Var "x"; rhs = Var "y"}}}))) 
+    
 end
 
 module PolyTest = struct
@@ -210,6 +227,7 @@ let suite = "Test ppx_morphism" >::: [
     "test_float_record" >:: Test1.test_float_record ;
     "test zero mapper" >:: Test1.test_zero ;
     "test fv" >:: Test2.test ;
+    "test uppercase mapper" >:: Test2.test_mapper ;
     "test poly fv" >:: PolyTest.test ;
     "test poly recursive fv" >:: PolyRecTest.test ;    
   ]

@@ -198,16 +198,20 @@ and gather_vars vars decl = gather_vars_ct vars decl.ptype_params
 let polymorphize arg ct =
   [%type: [%t ct] -> [%t arg] -> [%t arg]]
       
-let rec reduce_map_seq = function
-    [] -> [%expr fun x -> x] (* default serial fold *)
-  | (_,None)::es -> reduce_map_seq es
-  | (x,Some f) :: es -> reduce_map_seq2 [%expr [%e f] [%e x]] es
-
-and reduce_map_seq2 e = function
-    [] -> e
-  | (x,Some f) :: es -> reduce_map_seq2 [%expr [%e e] %> [%e f] [%e x]] es
-  | (_, None) :: es -> reduce_map_seq2 e es
-
+let reduce_map_seq ets =
+  (* Reduce a set of mapped arguments by applying all map-routines and create a tuple *)
+  let rec reduce_ ds = function
+    (* For each argument with a map-routine, apply that routine *)
+      [] -> ds
+    | (x,Some f) :: es -> reduce_ ([%expr [%e f] [%e x]]::ds) es
+    | (x,None) :: es -> reduce_ (x::ds) es
+  in
+  
+  match reduce_ [] ets with
+    [] -> None
+  | [e] -> Some e
+  | es -> Some (Exp.tuple es)
+                 
 let process_decl quoter
     {names;sub_mappers;defaults;mapper_fields}
     ({ ptype_loc = loc } as type_decl) =
@@ -223,14 +227,13 @@ let process_decl quoter
         constrs |>
         List.map (fun { pcd_name; pcd_args = typs } ->
             let maps = List.map (expr_of_typ names quoter) typs in
-            let pat = pat_tuple (opt_pattn maps) in
+            let pat = pat_tuple (pattn maps) in
             let subfield = Ppx_deriving.mangle_lid (`Prefix "map") (Lident pcd_name.txt) in
             (mknoloc subfield, [%expr fun self [%p pat] ->
                      [%e
                        (Exp.construct
                           {pcd_name with txt=Lident pcd_name.txt}
-                          (Some 
-                             (reduce_map_seq (List.combine (varn typs) maps))))]
+                          (reduce_map_seq (List.combine (varn typs) maps)))]
               ]))
       in
       (mknoloc (Lident on_var), (Exp.record fields None)) :: defaults
