@@ -171,8 +171,7 @@ module PolyTest = struct
                           }
 
   let upper_case = upper_case_mapper.map_expr upper_case_mapper 
-  
-  
+    
   let fv e = fv_folder.fold_expr fv_folder e []
 
   let test ctxt = 
@@ -211,7 +210,7 @@ module PolyRecTest = struct
   and ('a,'b) pair = { lhs : 'a ; rhs : 'b }
   
   and 'a binding = { var : string ; terms : (expr, 'a) pair }
-    [@@deriving folder]
+    [@@deriving folder,mapper]
 
   let fv_folder = { identity with
                   fold_binding =
@@ -221,9 +220,16 @@ module PolyRecTest = struct
                       f rhs ) ;
                   on_expr = { identity.on_expr with fold_Var = (fun self -> cons) }
                 }
-
+  
   let fv e = fv_folder.fold_expr fv_folder e []
 
+  let upper_case_mapper = { map_identity with
+                            map_binding = (fun f self {var;terms={rhs;lhs}} -> {var=String.uppercase var; terms={rhs=f rhs; lhs=self.map_expr self lhs}}) ;
+                            on_expr = { map_identity.on_expr with map_Var = fun _ x -> Var (String.uppercase x) ; } ;
+                          }
+
+  let upper_case = upper_case_mapper.map_expr upper_case_mapper 
+  
   let test ctxt = 
     assert_equal ~printer:show_fvs ["z"] (fv (Var "z")) ;
     assert_equal ~printer:show_fvs ["t"]
@@ -240,6 +246,22 @@ module PolyRecTest = struct
                                    rhs = ();
                                    lhs = App {lhs = Var "a"; rhs = Var "b"}}}}})) 
 
+  let test_mapper ctxt = 
+    assert_equal ~printer:show_fvs ["Z"] (fv (upper_case (Var "z"))) ;
+    assert_equal ~printer:show_fvs ["T"]
+      (fv (upper_case (Let {var="s"; terms={rhs = Int 0;
+                                            lhs = App {lhs = Var "t"; rhs = Var "s"}}}))) ;
+    assert_equal ~printer:show_fvs ["X"]
+      (fv (upper_case (Abs {var="y"; terms = { rhs=();
+                                               lhs = App {lhs = Var "x"; rhs = Var "y" }}}))) ;
+    assert_equal ~printer:show_fvs []
+      (fv (upper_case (Let{var="a";
+                           terms= { rhs=Int 0;
+                                    lhs=Abs {var="b";
+                                             terms={
+                                               rhs = ();
+                                               lhs = App {lhs = Var "a"; rhs = Var "b"}}}}}))) 
+
 end
 
 let suite = "Test ppx_morphism" >::: [
@@ -251,6 +273,7 @@ let suite = "Test ppx_morphism" >::: [
     "test poly fv" >:: PolyTest.test ;
     "test poly mapper" >:: PolyTest.test_mapper ;
     "test poly recursive fv" >:: PolyRecTest.test ;    
+    "test poly recursive mapper" >:: PolyRecTest.test_mapper ;    
   ]
 
 let _ =
