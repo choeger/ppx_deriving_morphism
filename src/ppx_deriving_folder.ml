@@ -210,7 +210,6 @@ and reduce_fold_seq2 e = function
 let process_decl quoter fold_arg_t
     {names;sub_folders;defaults;folder_fields}
     ({ ptype_loc = loc } as type_decl) =
-  Printf.printf "Process: %s\n" type_decl.ptype_name.txt;
   let field_name = Ppx_deriving.mangle_type_decl (`Prefix "fold") type_decl in
 
   (* create a default implementation (i.e. do nothing but walk the structure) *)
@@ -311,7 +310,6 @@ let folder_to_str fold_arg_t {names; defaults; sub_folders; folder_fields} =
   ]
   
 let str_of_type ~options ~path type_decls =
-  Printf.printf "str_of_type()\n";
   parse_options options ;
 
   let type_vars = List.fold_left gather_vars [] type_decls in    
@@ -328,4 +326,4 @@ let register () =
                             () ))
 
 
-let () = Printf.printf "Registering...\n" ; register ()
+let () = register ()

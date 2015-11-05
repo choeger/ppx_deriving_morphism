@@ -1,6 +1,6 @@
 version = "%{version}%"
 description = "[@@deriving morphism]"
-requires(-ppx_driver) = "ppx_deriving ppx_deriving_morphism.folder"
+requires(-ppx_driver) = "ppx_deriving ppx_deriving_morphism.folder ppx_deriving_morphism.mapper"
 ppxopt(-ppx_driver) = "ppx_deriving,./ppx_deriving_morphism.cma"
 requires(ppx_driver) = "ppx_deriving.api"
 archive(ppx_driver, byte) = "ppx_deriving_morphism.cma"
@@ -16,4 +16,15 @@ package "folder" (
   archive(ppx_driver, byte) = "ppx_deriving_folder.cma"
   archive(ppx_driver, native) = "ppx_deriving_folder.cmxa"
   exists_if = "ppx_deriving_folder.cma"
+)
+
+package "mapper" (
+  version = "%{version}%"
+  description = "[@@deriving mapper]"
+  requires(-ppx_driver) = "ppx_deriving"
+  ppxopt(-ppx_driver) = "ppx_deriving,./ppx_deriving_mapper.cma"
+  requires(ppx_driver) = "ppx_deriving.api"
+  archive(ppx_driver, byte) = "ppx_deriving_mapper.cma"
+  archive(ppx_driver, native) = "ppx_deriving_mapper.cmxa"
+  exists_if = "ppx_deriving_mapper.cma"
 )

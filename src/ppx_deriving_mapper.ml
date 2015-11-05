@@ -215,7 +215,6 @@ let reduce_map_seq ets =
 let process_decl quoter
     {names;sub_mappers;defaults;mapper_fields}
     ({ ptype_loc = loc } as type_decl) =
-  Printf.printf "Process: %s\n" type_decl.ptype_name.txt;
   let field_name = Ppx_deriving.mangle_type_decl (`Prefix "map") type_decl in
 
   (* create a default implementation (i.e. do nothing but walk the structure) *)
@@ -336,7 +335,6 @@ let mapper_to_str {names; defaults; sub_mappers; mapper_fields} =
   ]
   
 let str_of_type ~options ~path type_decls =
-  Printf.printf "str_of_type()\n";
   parse_options options ;
 
   let quoter = Ppx_deriving.create_quoter () in
@@ -351,4 +349,4 @@ let register () =
                             () ))
 
 
-let () = Printf.printf "Registering...\n" ; register ()
+let () = register ()
