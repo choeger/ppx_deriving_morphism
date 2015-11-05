@@ -151,7 +151,7 @@ module PolyTest = struct
   and app = { lhs : expr; arg : expr }
 
   and 'a binding = { var : string ; rhs : 'a; bdy : expr }
-                   [@@deriving folder]
+                   [@@deriving folder,mapper]
 
   let filter x fvs = List.filter (fun y -> not (y = x)) fvs
   let cons x xs = x::xs
@@ -165,6 +165,14 @@ module PolyTest = struct
                     on_expr = { identity.on_expr with fold_Var = (fun self -> cons) }
                   }
 
+  let upper_case_mapper = { map_identity with
+                            map_binding = (fun f self {var;rhs;bdy} -> {var=String.uppercase var; rhs=f rhs; bdy=self.map_expr self bdy}) ;
+                            on_expr = { map_identity.on_expr with map_Var = fun _ x -> Var (String.uppercase x) ; } ;
+                          }
+
+  let upper_case = upper_case_mapper.map_expr upper_case_mapper 
+  
+  
   let fv e = fv_folder.fold_expr fv_folder e []
 
   let test ctxt = 
@@ -177,6 +185,18 @@ module PolyTest = struct
       (fv (Let{var="a"; rhs=Int 0;
                bdy=Abs {var="b"; rhs = ();
                         bdy= App {lhs = Var "a"; arg = Var "b"}}})) 
+
+  let test_mapper ctxt = 
+    assert_equal ~printer:show_fvs ["Z"] (fv (upper_case (Var "z"))) ;
+    assert_equal ~printer:show_fvs ["T"]
+      (fv (upper_case (Let {var="s"; rhs=Int 0; bdy = App {lhs = Var "t"; arg = Var "s"}}))) ;
+    assert_equal ~printer:show_fvs ["X"]
+      (fv (upper_case (Abs {var="y"; rhs=(); bdy = App {lhs = Var "x"; arg = Var "y"}}))) ;
+    assert_equal ~printer:show_fvs []
+      (fv (upper_case(Let{var="a"; rhs=Int 0;
+                          bdy=Abs {var="b"; rhs = ();
+                                   bdy= App {lhs = Var "a"; arg = Var "b"}}}))) 
+
 end
 
 module PolyRecTest = struct
@@ -229,6 +249,7 @@ let suite = "Test ppx_morphism" >::: [
     "test fv" >:: Test2.test ;
     "test uppercase mapper" >:: Test2.test_mapper ;
     "test poly fv" >:: PolyTest.test ;
+    "test poly mapper" >:: PolyTest.test_mapper ;
     "test poly recursive fv" >:: PolyRecTest.test ;    
   ]
 

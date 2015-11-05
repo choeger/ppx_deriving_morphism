@@ -154,7 +154,7 @@ let rec exprsn names quoter typs =
 *)
 and expr_of_typ names quoter typ =
   let expr_of_typ : core_type -> expression option = expr_of_typ names quoter in
-  let map_pass = [%expr fun _ x -> x] in
+  let map_pass = [%expr fun x -> x] in
   match attr_map typ.ptyp_attributes with
   | Some fn -> Some (Ppx_deriving.quote quoter fn)
   | None ->
@@ -195,8 +195,8 @@ let rec gather_vars_ct vars = function
 
 and gather_vars vars decl = gather_vars_ct vars decl.ptype_params
 
-let polymorphize arg ct =
-  [%type: [%t ct] -> [%t arg] -> [%t arg]]
+let polymorphize ct =
+  [%type: [%t ct] -> [%t ct]]
       
 let reduce_map_seq ets =
   (* Reduce a set of mapped arguments by applying all map-routines and create a tuple *)
@@ -312,7 +312,7 @@ let process_decl quoter
       begin 
         (* every other type in the group gets a map-routine *)
         let vars = gather_vars [] type_decl in
-        let routine_t = (poly_arrow_of_type_decl (polymorphize mapped)
+        let routine_t = (poly_arrow_of_type_decl polymorphize
                 type_decl [%type: ([%t mapped], [%t mapped]) map_routine]) in
         ( (Type.field (mknoloc field_name)
              (Typ.poly vars routine_t)
