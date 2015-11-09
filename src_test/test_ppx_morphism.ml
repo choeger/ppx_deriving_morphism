@@ -67,19 +67,19 @@ module Test1 = struct
      }
 *)
 
-  let sum = { identity with fold_foo = (fun self {x;y} z -> x + y + z) } 
+  let sum = { identity_folder with fold_foo = (fun self {x;y} z -> x + y + z) } 
 
   let test_int_record ctxt =
     assert_equal ~printer:string_of_int 3 (sum.fold_foo sum {x=2;y=1} 0) ;
     assert_equal ~printer:string_of_int 42 (sum.fold_baz sum (Bar {lhs=Foo{x=1;y=1}; rhs={x=0;y=40}}) 0)
       
-  let float_sum = { identity with fold_foo = (fun self {x;y} z -> (float_of_int x) +. (float_of_int y) +. z) }
+  let float_sum = { identity_folder with fold_foo = (fun self {x;y} z -> (float_of_int x) +. (float_of_int y) +. z) }
 
   let test_float_record ctxt =
     assert_equal ~printer:string_of_float 3. (float_sum.fold_foo float_sum {x=2;y=1} 0.0) ;
     assert_equal ~printer:string_of_float 42. (float_sum.fold_baz float_sum (Bar {lhs=Foo{x=1;y=1}; rhs={x=0;y=40}}) 0.)
 
-  let zero = { map_identity with map_foo = (fun self _ -> {x=0;y=0}) }
+  let zero = { identity_mapper with map_foo = (fun self _ -> {x=0;y=0}) }
 
   let test_zero ctxt =
     assert_equal {x=0;y=0} (zero.map_foo zero {x=42;y=23}) 
@@ -106,23 +106,23 @@ module Test2 = struct
   and let_ = {let_var : string; let_bdy : expr ; let_rhs : expr}
     [@@deriving folder, mapper]  
                 
-  let fv_folder = { identity with fold_abs = (fun self {abs_var; abs_rhs} -> self.fold_expr self abs_rhs %> (filter abs_var)) ;
-                                  fold_let_ = (fun self {let_var; let_bdy; let_rhs} ->
-                                      self.fold_expr self let_bdy %>
-                                      filter let_var %>
-                                      self.fold_expr self let_rhs ) ;
-                                  on_expr = { identity.on_expr with fold_Var = (fun self -> cons) }
+  let fv_folder = { identity_folder with fold_abs = (fun self {abs_var; abs_rhs} -> self.fold_expr self abs_rhs %> (filter abs_var)) ;
+                                         fold_let_ = (fun self {let_var; let_bdy; let_rhs} ->
+                                             self.fold_expr self let_bdy %>
+                                             filter let_var %>
+                                             self.fold_expr self let_rhs ) ;
+                                         on_expr = { identity_folder.on_expr with fold_Var = (fun self -> cons) }
                   }
 
   let fv e = fv_folder.fold_expr fv_folder e []
 
-  let upper_case_mapper = { map_identity with on_expr = { map_identity.on_expr with map_Var = fun _ x -> Var (String.uppercase x) ;} ;
-                                              map_abs = ( fun self {abs_var; abs_rhs} -> {abs_rhs = self.map_expr self abs_rhs ;
-                                                                                          abs_var = String.uppercase abs_var } ) ;
-                                              map_let_= ( fun self {let_var; let_bdy; let_rhs} ->
-                                                          { let_var = String.uppercase let_var ;
-                                                            let_bdy = self.map_expr self let_bdy ;
-                                                            let_rhs = self.map_expr self let_rhs } ) ;
+  let upper_case_mapper = { identity_mapper with on_expr = { identity_mapper.on_expr with map_Var = fun _ x -> Var (String.uppercase x) ;} ;
+                                                 map_abs = ( fun self {abs_var; abs_rhs} -> {abs_rhs = self.map_expr self abs_rhs ;
+                                                                                             abs_var = String.uppercase abs_var } ) ;
+                                                 map_let_= ( fun self {let_var; let_bdy; let_rhs} ->
+                                                     { let_var = String.uppercase let_var ;
+                                                       let_bdy = self.map_expr self let_bdy ;
+                                                       let_rhs = self.map_expr self let_rhs } ) ;
                           }
 
   let upper_case = upper_case_mapper.map_expr upper_case_mapper 
@@ -156,18 +156,18 @@ module PolyTest = struct
   let filter x fvs = List.filter (fun y -> not (y = x)) fvs
   let cons x xs = x::xs
 
-  let fv_folder = { identity with
+  let fv_folder = { identity_folder with
                     fold_binding =
                       (fun f self {var;rhs;bdy} ->
                          self.fold_expr self bdy %>
                          filter var %>
                          f rhs ) ;
-                    on_expr = { identity.on_expr with fold_Var = (fun self -> cons) }
+                    on_expr = { identity_folder.on_expr with fold_Var = (fun self -> cons) }
                   }
 
-  let upper_case_mapper = { map_identity with
+  let upper_case_mapper = { identity_mapper with
                             map_binding = (fun f self {var;rhs;bdy} -> {var=String.uppercase var; rhs=f rhs; bdy=self.map_expr self bdy}) ;
-                            on_expr = { map_identity.on_expr with map_Var = fun _ x -> Var (String.uppercase x) ; } ;
+                            on_expr = { identity_mapper.on_expr with map_Var = fun _ x -> Var (String.uppercase x) ; } ;
                           }
 
   let upper_case = upper_case_mapper.map_expr upper_case_mapper 
@@ -212,20 +212,20 @@ module PolyRecTest = struct
   and 'a binding = { var : string ; terms : (expr, 'a) pair }
     [@@deriving folder,mapper]
 
-  let fv_folder = { identity with
+  let fv_folder = { identity_folder with
                   fold_binding =
                     (fun f self {var;terms={rhs;lhs}} ->
                       self.fold_expr self lhs %>
                       filter var %>
                       f rhs ) ;
-                  on_expr = { identity.on_expr with fold_Var = (fun self -> cons) }
+                  on_expr = { identity_folder.on_expr with fold_Var = (fun self -> cons) }
                 }
   
   let fv e = fv_folder.fold_expr fv_folder e []
 
-  let upper_case_mapper = { map_identity with
+  let upper_case_mapper = { identity_mapper with
                             map_binding = (fun f self {var;terms={rhs;lhs}} -> {var=String.uppercase var; terms={rhs=f rhs; lhs=self.map_expr self lhs}}) ;
-                            on_expr = { map_identity.on_expr with map_Var = fun _ x -> Var (String.uppercase x) ; } ;
+                            on_expr = { identity_mapper.on_expr with map_Var = fun _ x -> Var (String.uppercase x) ; } ;
                           }
 
   let upper_case = upper_case_mapper.map_expr upper_case_mapper 

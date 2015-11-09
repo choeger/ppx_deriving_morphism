@@ -306,7 +306,7 @@ let folder_to_str fold_arg_t {names; defaults; sub_folders; folder_fields} =
           ~manifest:[%type: 'a folder -> 'b -> 'a -> 'a] (mknoloc "fold_routine") ::
         sub_folders
       )) ;    
-    (Str.value Nonrecursive [Vb.mk (pvar "identity") (Exp.record defaults None)]) ;
+    (Str.value Nonrecursive [Vb.mk (pvar "identity_folder") (Exp.record defaults None)]) ;
   ]
   
 let str_of_type ~options ~path type_decls =

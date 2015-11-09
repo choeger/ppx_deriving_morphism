@@ -331,7 +331,7 @@ let mapper_to_str {names; defaults; sub_mappers; mapper_fields} =
 
         sub_mappers
       )) ;    
-    (Str.value Nonrecursive [Vb.mk (pvar "map_identity") (Exp.record defaults None)]) ;
+    (Str.value Nonrecursive [Vb.mk (pvar "identity_mapper") (Exp.record defaults None)]) ;
   ]
   
 let str_of_type ~options ~path type_decls =
