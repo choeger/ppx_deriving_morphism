@@ -40,33 +40,6 @@ module Test1 = struct
             
   and baz = Foo of foo | Bar of bar [@@deriving folder,mapper]
 
-(* expected: 
-     type 'a folder = {
-       fold_foo : ('a, foo) fold_routine ;
-       fold_bar : ('a, bar) fold_routine ;
-       fold_baz : ('a, baz) fold_routine ;
-
-       on_baz : 'a baz_folder ;
-     }
-   
-     and 'a baz_folder = {
-       fold_Foo : ('a, foo) fold_routine ;
-       fold_Bar : ('a, bar) fold_routine ;
-     }
-
-     and ('a,'b) fold_routine = 'a folder -> 'b -> 'a -> 'a
-
-     let identity = {
-       fold_foo = (fun _ _ x -> x) ;
-       fold_bar = (fun _ _ x -> x) ;
-       fold_baz = (fun self -> function Bar bar -> self.on_baz.fold_Bar self bar 
-                                      | Foo foo -> self.on_baz.fold_Foo self foo) ;
-
-       on_baz = { fold_Foo self = self.fold_foo self ; 
-                  fold_Bar self = self.fold_bar self }
-     }
-*)
-
   let sum = { identity_folder with fold_foo = (fun self {x;y} z -> x + y + z) } 
 
   let test_int_record ctxt =
@@ -97,6 +70,7 @@ module Test2 = struct
             | App of app
             | Let of let_
             | Int of int
+            | Sel of expr * string
             | Var of string
 
   and abs = { abs_var : string; abs_rhs : expr }
@@ -129,11 +103,13 @@ module Test2 = struct
   
   let test ctxt = 
     assert_equal ~printer:show_fvs ["x"] (fv (Var "x")) ;
+    assert_equal ~printer:show_fvs ["x"] (fv (Sel (Var "x", "foo"))) ;
     assert_equal ~printer:show_fvs ["x"] (fv (Abs {abs_var="y"; abs_rhs = App {lhs = Var "x"; rhs = Var "y"}})) ;
     assert_equal ~printer:show_fvs [] (fv (Let {let_var="x"; let_rhs=Int 0; let_bdy=Abs {abs_var="y"; abs_rhs = App {lhs = Var "x"; rhs = Var "y"}}})) 
 
   let test_mapper ctxt =
     assert_equal ~printer:show_fvs ["X"] (fv (upper_case (Var "x"))) ;    
+    assert_equal ~printer:show_fvs ["X"] (fv (Sel (Var "x", "foo"))) ;
     assert_equal ~printer:show_fvs ["X"] (fv (upper_case (Abs {abs_var="y"; abs_rhs = App {lhs = Var "x"; rhs = Var "y"}}))) ;
     assert_equal ~printer:show_fvs [] (fv (upper_case (Let {let_var="x"; let_rhs=Int 0; let_bdy=Abs {abs_var="y"; abs_rhs = App {lhs = Var "x"; rhs = Var "y"}}}))) 
     
