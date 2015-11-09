@@ -202,7 +202,7 @@ let reduce_map_seq ets =
   (* Reduce a set of mapped arguments by applying all map-routines and create a tuple *)
   let rec reduce_ ds = function
     (* For each argument with a map-routine, apply that routine *)
-      [] -> ds
+      [] -> List.rev ds
     | (x,Some f) :: es -> reduce_ ([%expr [%e f] [%e x]]::ds) es
     | (x,None) :: es -> reduce_ (x::ds) es
   in

@@ -109,7 +109,7 @@ module Test2 = struct
 
   let test_mapper ctxt =
     assert_equal ~printer:show_fvs ["X"] (fv (upper_case (Var "x"))) ;    
-    assert_equal ~printer:show_fvs ["X"] (fv (Sel (Var "x", "foo"))) ;
+    assert_equal ~printer:show_fvs ["X"] (fv (upper_case (Sel (Var "x", "foo")))) ;
     assert_equal ~printer:show_fvs ["X"] (fv (upper_case (Abs {abs_var="y"; abs_rhs = App {lhs = Var "x"; rhs = Var "y"}}))) ;
     assert_equal ~printer:show_fvs [] (fv (upper_case (Let {let_var="x"; let_rhs=Int 0; let_bdy=Abs {abs_var="y"; abs_rhs = App {lhs = Var "x"; rhs = Var "y"}}}))) 
     
