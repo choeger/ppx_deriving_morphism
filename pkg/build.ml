@@ -9,5 +9,5 @@ let () =
     Pkg.lib ~exts:Exts.library "src/ppx_deriving_folder";
     Pkg.lib ~exts:Exts.library "src/ppx_deriving_mapper";
     Pkg.doc "README.md";
-    Pkg.doc "LICENSE.txt";
+    Pkg.doc "LICENSE";
     Pkg.doc "CHANGELOG.md"; ]
