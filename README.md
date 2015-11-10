@@ -3,10 +3,10 @@ Deriving Morphisms for arbitrary OCaml data structures
 
 This package provides a plugin for ppx_deriving that generates morphisms in the style of the ast_mapper in the ocaml source tree for arbitrary data structures (with a clear focus on syntax trees).
 
-== Usage ==
+## Usage
 
 
-== Limitations ==
+## Limitations
 
 At this early stage, the implementation has some limitations:
 
