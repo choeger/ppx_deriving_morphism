@@ -276,7 +276,12 @@ let process_decl quoter
                (mknoloc (Lident pld_name.txt)), pvar pld_name.txt)) Closed
       in
       [%expr fun self [%p pattern]  -> [%e Exp.record maps None] ]
-        
+
+    | Ptype_abstract ->
+      begin match type_decl.ptype_manifest with
+          Some ct -> [%expr fun self -> [%e lift_map (expr_of_typ names quoter ct)]]
+        | None -> lift_map None
+      end
     | _ -> lift_map None
   in
   let defaults = (mknoloc (Lident default_var), (poly_fun_of_type_decl type_decl default_map))::defaults in

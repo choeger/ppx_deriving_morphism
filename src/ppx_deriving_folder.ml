@@ -254,7 +254,11 @@ let process_decl quoter fold_arg_t
       [%expr fun self [%p Pat.record (labels |>
                                       List.map (fun {pld_name} ->
                                           (mknoloc (Lident pld_name.txt)), pvar pld_name.txt)) Closed] -> [%e reduce_fold_seq folds]]
-        
+    | Ptype_abstract ->
+      begin match type_decl.ptype_manifest with
+          Some ct -> [%expr fun self -> [%e lift_fold (expr_of_typ names quoter ct)]]
+        | None -> lift_fold None
+      end        
     | _ -> lift_fold None
   in
   let defaults = (mknoloc (Lident default_var), (poly_fun_of_type_decl type_decl default_fold))::defaults in

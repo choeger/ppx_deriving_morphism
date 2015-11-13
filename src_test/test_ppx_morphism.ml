@@ -177,13 +177,17 @@ end
 module PolyRecTest = struct
   (** Even more complicated, reuse pairing structure *)
   
-  type expr = Abs of unit binding
+  type expr = Abs of abs_binding
             | App of (expr,expr) pair
             | Let of expr binding
             | Var of string
-            | Int of int
+            | Int of my_int
 
+  and my_int = int
+  
   and ('a,'b) pair = { lhs : 'a ; rhs : 'b }
+
+  and abs_binding = unit binding
   
   and 'a binding = { var : string ; terms : (expr, 'a) pair }
     [@@deriving folder,mapper]
