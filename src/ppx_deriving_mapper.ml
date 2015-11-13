@@ -279,7 +279,10 @@ let process_decl quoter
 
     | Ptype_abstract ->
       begin match type_decl.ptype_manifest with
-          Some ct -> [%expr fun self -> [%e lift_map (expr_of_typ names quoter ct)]]
+          Some ct -> begin match expr_of_typ names quoter ct with
+              Some f -> [%expr fun self -> [%e f]]
+            | None -> lift_map None
+          end
         | None -> lift_map None
       end
     | _ -> lift_map None
