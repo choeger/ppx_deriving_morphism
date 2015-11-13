@@ -143,6 +143,10 @@ let lift_map = function
     None -> [%expr fun _ x -> x]
   | Some f -> f
 
+let opt_map f x = match x with
+    Some y -> Some (f y)
+  | None -> None
+
 let rec exprsn names quoter typs =
   typs |> List.mapi (fun i typ -> match expr_of_typ names quoter typ with
         None -> None
@@ -160,16 +164,14 @@ and expr_of_typ names quoter typ =
   | None ->
     match typ with
     (* Lists can be mapped directly *)
-    | [%type: [%t? typ] list] -> begin match expr_of_typ typ with
-        | None -> None
-        | Some e -> Some [%expr List.map [%e e]]
-      end
+    | [%type: [%t? typ] list] ->
+      opt_map (fun e -> [%expr List.map [%e e]]) (expr_of_typ typ)
     (* Dito for arrays *)
     | [%type: [%t? typ] array] ->
-      begin match expr_of_typ typ with
-        | None -> None
-        | Some e -> Some [%expr Array.map [%e e]]
-      end
+      opt_map (fun e -> [%expr Array.map [%e e]]) (expr_of_typ typ)
+    (* And options *)
+    | [%type: [%t? typ] option] ->
+      opt_map (fun e -> [%expr fun o -> match o with None -> None | Some y -> Some ([%e e] y)]) (expr_of_typ typ)
     (* For variables, we expect the corresponding map function as an argument *)
     | { ptyp_desc = Ptyp_var x } ->
       Some (Exp.ident (mknoloc (Lident ("poly_" ^ x))))

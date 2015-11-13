@@ -130,6 +130,10 @@ let lift_fold = function
     None -> [%expr fun _ _ x -> x]
   | Some f -> f
 
+let opt_map f x = match x with
+    Some y -> Some (f y)
+  | None -> None
+
 let rec exprsn names quoter typs =
   typs |> List.mapi (fun i typ -> match expr_of_typ names quoter typ with
         None -> None
@@ -147,20 +151,17 @@ and expr_of_typ names quoter typ =
   | None ->
     match typ with
     (* Lists can be folded directly *)
-    | [%type: [%t? typ] list] -> begin match expr_of_typ typ with
-        | None -> None
-        | Some e -> Some [%expr List.fold_right [%e e]]
-      end
+    | [%type: [%t? typ] list] ->
+      opt_map (fun e -> [%expr List.fold_right [%e e]]) (expr_of_typ typ)
     (* Dito for arrays *)
     | [%type: [%t? typ] array] ->
-      begin match expr_of_typ typ with
-        | None -> None
-        | Some e -> Some [%expr Array.fold_right [%e e]]
-      end
+      opt_map (fun e -> [%expr Array.fold_right [%e e]]) (expr_of_typ typ)
+    (* And options *)
+    | [%type: [%t? typ] option] ->
+      opt_map (fun e -> [%expr fun o x -> match o with None -> x | Some y -> [%e e] y x]) (expr_of_typ typ)
     (* For variables, we expect the corresponding fold function as an argument *)
     | { ptyp_desc = Ptyp_var x } ->
-      Some (Exp.ident (mknoloc (Lident ("poly_" ^ x))))
-      
+      Some (Exp.ident (mknoloc (Lident ("poly_" ^ x))))      
     (* A known constructor (i.e. the name appears in the names arg) *)
     | { ptyp_desc = Ptyp_constr ({ txt = (Lident name) }, args) } when List.mem name names ->
       let fold_fn = Exp.field (evar "self") (mknoloc (Ppx_deriving.mangle_lid (`Prefix "fold") (Lident name))) in

@@ -244,6 +244,54 @@ module PolyRecTest = struct
 
 end
 
+module TupleTest = struct
+  (** A simple binary tree *)
+
+  type node = Node of int * children
+  and children = tree * tree
+  and tree = node option
+    [@@deriving folder,mapper,show]
+    
+  let insertion_mapper n = {identity_mapper with
+                            map_node =
+                              (fun self (Node (m,(left,right))) ->
+                                 if n = m then Node (m,(left,right)) else
+                                 if n < m then Node (m, ((self.map_tree self left), right))
+                                 else Node (m, (left, self.map_tree self right))
+                              ) ;
+                            map_tree = (fun self -> function None -> Some (Node (n, (None, None)))
+                                                           | Some node -> Some (self.map_node self node)
+                              );
+                           }
+
+  let insert i t = let m = insertion_mapper i in m.map_tree m t
+
+  let incr_mapper = {identity_mapper with
+                     (* Node vs. node test *)
+                     on_node = {
+                       map_Node = (fun self (n,children) -> Node (n + 1, self.map_children self children))
+                     };
+                    }
+
+  let inc = incr_mapper.map_tree incr_mapper
+
+  let sum_folder = {identity_folder with
+                    on_node = {
+                      fold_Node = (fun self (n,children) sum -> self.fold_children self children (n + sum)) ;
+                    }
+                   }
+
+  let sum t = sum_folder.fold_tree sum_folder t 0
+  
+  let test_mapper ctxt =
+    assert_equal ~printer:show_tree (Some (Node (2, (Some (Node (1, (None, None))), None)))) (insert 1 (insert 2 None)) ;
+    assert_equal ~printer:show_tree (Some (Node (3, (Some (Node (2, (None, None))), None)))) (inc (insert 1 (insert 2 None))) 
+
+  let test_folder ctxt =
+    assert_equal ~printer:string_of_int 5 (sum (inc (insert 1 (insert 2 None))))
+                                   
+end
+
 let suite = "Test ppx_morphism" >::: [
     "test_int_record" >:: Test1.test_int_record ;
     "test_float_record" >:: Test1.test_float_record ;
@@ -253,7 +301,9 @@ let suite = "Test ppx_morphism" >::: [
     "test poly fv" >:: PolyTest.test ;
     "test poly mapper" >:: PolyTest.test_mapper ;
     "test poly recursive fv" >:: PolyRecTest.test ;    
-    "test poly recursive mapper" >:: PolyRecTest.test_mapper ;    
+    "test poly recursive mapper" >:: PolyRecTest.test_mapper ;
+    "Tuple and option mapper" >:: TupleTest.test_mapper ;
+    "Tuple and option folder" >:: TupleTest.test_folder ;    
   ]
 
 let _ =
