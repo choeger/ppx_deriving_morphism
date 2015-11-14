@@ -134,16 +134,20 @@ let opt_map f x = match x with
     Some y -> Some (f y)
   | None -> None
 
-let rec exprsn names quoter typs =
-  typs |> List.mapi (fun i typ -> match expr_of_typ names quoter typ with
-        None -> None
-      | Some f ->  
-        Some (app f [evar (argn i)]))
+let rec reduce_fold_seq = function
+    [] -> [%expr fun x -> x] (* default serial fold *)
+  | (_,None)::es -> reduce_fold_seq es
+  | (x,Some f) :: es -> reduce_fold_seq2 [%expr [%e f] [%e x]] es
+
+and reduce_fold_seq2 e = function
+    [] -> e
+  | (x,Some f) :: es -> reduce_fold_seq2 [%expr [%e e] %> [%e f] [%e x]] es
+  | (_, None) :: es -> reduce_fold_seq2 e es
 
 (* generate the fold routine for a given type. 
    Since we might be able to optimize it, in case of unknown types, returns None
    (the identity fold is only used when necessary) *)
-and expr_of_typ names quoter typ =
+let rec expr_of_typ names quoter typ =
   let fold_pass = [%expr fun _ x -> x] in (* 'do nothing' fold-routine *)
   let expr_of_typ : core_type -> expression option = expr_of_typ names quoter in
   match attr_fold typ.ptyp_attributes with
@@ -160,6 +164,14 @@ and expr_of_typ names quoter typ =
     | [%type: [%t? typ] option] ->
       opt_map (fun e -> [%expr fun o x -> match o with None -> x | Some y -> [%e e] y x]) (expr_of_typ typ)
     (* For variables, we expect the corresponding fold function as an argument *)
+
+    (* A tuple, map each element *)
+    | { ptyp_desc = Ptyp_tuple typs } ->
+      let folds = List.map expr_of_typ typs in
+      let pat = pat_tuple (pattn folds) in
+      let fold = reduce_fold_seq (List.combine (varn typs) folds) in
+      Some [%expr fun [%p pat] -> [%e fold]]
+
     | { ptyp_desc = Ptyp_var x } ->
       Some (Exp.ident (mknoloc (Lident ("poly_" ^ x))))      
     (* A known constructor (i.e. the name appears in the names arg) *)
@@ -198,16 +210,6 @@ and gather_vars vars decl = gather_vars_ct vars decl.ptype_params
 let polymorphize arg ct =
   [%type: [%t ct] -> [%t arg] -> [%t arg]]
       
-let rec reduce_fold_seq = function
-    [] -> [%expr fun x -> x] (* default serial fold *)
-  | (_,None)::es -> reduce_fold_seq es
-  | (x,Some f) :: es -> reduce_fold_seq2 [%expr [%e f] [%e x]] es
-
-and reduce_fold_seq2 e = function
-    [] -> e
-  | (x,Some f) :: es -> reduce_fold_seq2 [%expr [%e e] %> [%e f] [%e x]] es
-  | (_, None) :: es -> reduce_fold_seq2 e es
-
 let process_decl quoter fold_arg_t
     {names;sub_folders;defaults;folder_fields}
     ({ ptype_loc = loc } as type_decl) =

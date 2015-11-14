@@ -147,16 +147,24 @@ let opt_map f x = match x with
     Some y -> Some (f y)
   | None -> None
 
-let rec exprsn names quoter typs =
-  typs |> List.mapi (fun i typ -> match expr_of_typ names quoter typ with
-        None -> None
-      | Some f ->  
-        Some (app f [evar (argn i)]))
+let reduce_map_seq ets =
+  (* Reduce a set of mapped arguments by applying all map-routines and create a tuple *)
+  let rec reduce_ ds = function
+    (* For each argument with a map-routine, apply that routine *)
+      [] -> List.rev ds
+    | (x,Some f) :: es -> reduce_ ([%expr [%e f] [%e x]]::ds) es
+    | (x,None) :: es -> reduce_ (x::ds) es
+  in
+  
+  match reduce_ [] ets with
+    [] -> None
+  | [e] -> Some e
+  | es -> Some (Exp.tuple es)
 
 (* generate the map routine for a given type. 
    In case of unknown types, returns None
 *)
-and expr_of_typ names quoter typ =
+let rec expr_of_typ names quoter typ =
   let expr_of_typ : core_type -> expression option = expr_of_typ names quoter in
   let map_pass = [%expr fun x -> x] in
   match attr_map typ.ptyp_attributes with
@@ -175,6 +183,16 @@ and expr_of_typ names quoter typ =
     (* For variables, we expect the corresponding map function as an argument *)
     | { ptyp_desc = Ptyp_var x } ->
       Some (Exp.ident (mknoloc (Lident ("poly_" ^ x))))
+
+    (* A tuple, map each element *)
+    | { ptyp_desc = Ptyp_tuple typs } ->
+      let maps = List.map expr_of_typ typs in
+      let pat = pat_tuple (pattn maps) in
+      let map = match reduce_map_seq (List.combine (varn typs) maps) with
+          Some e -> e
+        | None -> raise (Failure "Tuple invariant broken")
+      in
+      Some [%expr fun [%p pat] -> [%e map]]
       
     (* A known constructor (i.e. the name appears in the names arg) 
        We expect a map_<t> function to exist 
@@ -199,21 +217,7 @@ and gather_vars vars decl = gather_vars_ct vars decl.ptype_params
 
 let polymorphize ct =
   [%type: [%t ct] -> [%t ct]]
-      
-let reduce_map_seq ets =
-  (* Reduce a set of mapped arguments by applying all map-routines and create a tuple *)
-  let rec reduce_ ds = function
-    (* For each argument with a map-routine, apply that routine *)
-      [] -> List.rev ds
-    | (x,Some f) :: es -> reduce_ ([%expr [%e f] [%e x]]::ds) es
-    | (x,None) :: es -> reduce_ (x::ds) es
-  in
-  
-  match reduce_ [] ets with
-    [] -> None
-  | [e] -> Some e
-  | es -> Some (Exp.tuple es)
-                 
+                       
 let process_decl quoter
     {names;sub_mappers;defaults;mapper_fields}
     ({ ptype_loc = loc } as type_decl) =
