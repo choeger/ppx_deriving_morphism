@@ -27,10 +27,8 @@
  *)
 
 open OUnit2
-
+    
 let fold_int _ x sum = x + sum
-
-let (%>) f g = fun x -> g (f x) (** helper for fold function composition *)
 
 module Test1 = struct
   (** Just run over some basic foo-structures *)
@@ -79,7 +77,8 @@ module Test2 = struct
 
   and let_ = {let_var : string; let_bdy : expr ; let_rhs : expr}
     [@@deriving folder, mapper]  
-                
+
+  let (%>) f g x = g (f x)
   let fv_folder = { identity_folder with fold_abs = (fun self {abs_var; abs_rhs} -> self.fold_expr self abs_rhs %> (filter abs_var)) ;
                                          fold_let_ = (fun self {let_var; let_bdy; let_rhs} ->
                                              self.fold_expr self let_bdy %>
@@ -132,6 +131,7 @@ module PolyTest = struct
   let filter x fvs = List.filter (fun y -> not (y = x)) fvs
   let cons x xs = x::xs
 
+  let (%>) f g x = g (f x)
   let fv_folder = { identity_folder with
                     fold_binding =
                       (fun f self {var;rhs;bdy} ->
@@ -192,6 +192,7 @@ module PolyRecTest = struct
   and 'a binding = { var : string ; terms : (expr, 'a) pair }
     [@@deriving folder,mapper]
 
+  let (%>) f g x = g (f x)
   let fv_folder = { identity_folder with
                   fold_binding =
                     (fun f self {var;terms={rhs;lhs}} ->
@@ -249,6 +250,7 @@ module TupleTest = struct
 
   type node = Node of int * children
   and children = tree * tree
+  and foo = children * tree option
   and tree = node option
     [@@deriving folder,mapper,show]
     

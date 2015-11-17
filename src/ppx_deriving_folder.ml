@@ -141,7 +141,7 @@ let rec reduce_fold_seq = function
 
 and reduce_fold_seq2 e = function
     [] -> e
-  | (x,Some f) :: es -> reduce_fold_seq2 [%expr [%e e] %> [%e f] [%e x]] es
+  | (x,Some f) :: es -> reduce_fold_seq2 [%expr (fun f g x -> g (f x)) ([%e e]) ([%e f] [%e x])] es
   | (_, None) :: es -> reduce_fold_seq2 e es
 
 (* generate the fold routine for a given type. 

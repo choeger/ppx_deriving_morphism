@@ -25,9 +25,7 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  *)
-
-open Ppx_deriving_folder
-
+    
 let () =
   Ppx_deriving_mapper.register () ;
   Ppx_deriving_folder.register () 
