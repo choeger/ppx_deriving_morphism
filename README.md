@@ -78,4 +78,4 @@ At this early stage, the implementation has some limitations:
 * Currently, there is no way to derive a signature for a folder or a mapper
 * The fact that there needs to be a name of the morphism-records means that only one folder and mapper can be derived for each module
 * Only constructors in the recursive group are considered by the automatically generated folder and mapper
-* The in-order function composition operator ```%>``` with the signature ```('a -> 'b) -> ('b -> 'c) -> ('a -> 'c)``` needs to be in scope - this will be fixed soon.
+
