@@ -239,7 +239,7 @@ let process_decl quoter fold_arg_t
             (* Get a pattern and a corresponding folding-sequence from the constructor args *)
             let (pat, folds) = match pcd_args with
               (* Classic constructor arguments, we make up names *)
-                Pcstr_tuple typs ->
+                Pcstr_tuple(typs) ->
                 let appls = List.map (expr_of_typ names quoter) typs in
                 (pat_tuple (opt_pattn appls), List.combine (varn typs) appls)
 #if OCAML_VERSION >= (4, 03, 0)                                    
@@ -272,7 +272,7 @@ let process_decl quoter fold_arg_t
         constrs |>
         List.map (fun { pcd_name; pcd_args} ->
             let (pat, vars) = match pcd_args with
-                Pcstr_tuple typs -> (pconstr pcd_name.txt (pattn typs), varn typs)
+                Pcstr_tuple(typs) -> (pconstr pcd_name.txt (pattn typs), varn typs)
 #if OCAML_VERSION >= (4, 03, 0)                                    
               | Pcstr_record labels ->
                 (pconstrrec pcd_name.txt (pattl labels),
@@ -323,7 +323,7 @@ let process_decl quoter fold_arg_t
       let typs_to_field { pcd_name; pcd_args} =
         let typs = 
         match pcd_args with
-        Pcstr_tuple typs -> typs
+        Pcstr_tuple(typs) -> typs
 #if OCAML_VERSION >= (4, 03, 0)                                    
         | Pcstr_record labels -> List.map (fun {pld_type} -> pld_type) labels
 #endif

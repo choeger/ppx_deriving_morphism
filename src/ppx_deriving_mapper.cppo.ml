@@ -207,7 +207,7 @@ let rec expr_of_typ names quoter typ =
       Some (Exp.ident (mknoloc (Lident ("poly_" ^ x))))
 
     (* A tuple, map each element *)
-    | { ptyp_desc = Ptyp_tuple typs } ->
+    | { ptyp_desc = Ptyp_tuple(typs) } ->
       let maps = List.map expr_of_typ typs in
       let pat = pat_tuple (pattn maps) in
       let map = match reduce_map_seq (List.combine (varn typs) maps) with
@@ -254,7 +254,7 @@ let process_decl quoter
         constrs |>
         List.map (fun { pcd_name; pcd_args } ->            
             let (pat, rhs) = match pcd_args with              
-                Pcstr_tuple typs ->
+                Pcstr_tuple(typs) ->
                 let maps = List.map (expr_of_typ names quoter) typs in
                 (pat_tuple (pattn maps), constr pcd_name.txt (reduce_map_seq (List.combine (varn typs) maps)))
 #if OCAML_VERSION >= (4, 03, 0)                                    
@@ -281,7 +281,7 @@ let process_decl quoter
         List.map (fun { pcd_name; pcd_args } ->
             let subfield = Ppx_deriving.mangle_lid (`Prefix "map") (Lident pcd_name.txt) in
             let (pat, mk) = match pcd_args with
-                Pcstr_tuple typs -> ((pconstr pcd_name.txt (pattn typs)), tuple (varn typs))
+                Pcstr_tuple(typs) -> ((pconstr pcd_name.txt (pattn typs)), tuple (varn typs))
 #if OCAML_VERSION >= (4, 03, 0)                                    
               | Pcstr_record labels ->
                 (pconstrrec pcd_name.txt (pattl labels),
@@ -348,7 +348,7 @@ let process_decl quoter
       let typs_to_field { pcd_name; pcd_args} =
         let typs = 
           match pcd_args with
-            Pcstr_tuple typs -> typs
+            Pcstr_tuple(typs) -> typs
 #if OCAML_VERSION >= (4, 03, 0)                                    
           | Pcstr_record labels -> List.map (fun {pld_type} -> pld_type) labels
 #endif
