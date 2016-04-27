@@ -25,6 +25,12 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  *)
+#if OCAML_VERSION < (4, 03, 0)
+#define STR_TYPE_RECURSIVE 
+#define Pcstr_tuple(core_types) core_types
+#else
+#define STR_TYPE_RECURSIVE Recursive
+#endif
 
 (** Generate folder-record(s) for a given type. 
 
@@ -100,7 +106,9 @@ let attr_fold attrs =
 
 let argn =
   Printf.sprintf "arg%d"
-
+let argl =
+  Printf.sprintf "arg%s"
+    
 let opt_pattn folds =
   List.mapi (fun i e -> match e with Some _ -> pvar (argn i) | None -> Pat.any ()) folds
 
@@ -114,6 +122,10 @@ let pat_tuple = function
   | [] -> Pat.any ()
   | [p] -> p
   | ps -> Pat.tuple ps
+
+let pattl labels = List.map (fun { pld_name = { txt = n } } -> n, pvar (argl n)) labels
+
+let pconstrrec name fields = pconstr name [precord ~closed:Closed fields]
 
 let core_type_of_decl ~options ~path type_decl =
   let typ = Ppx_deriving.core_type_of_type_decl type_decl in
@@ -180,7 +192,7 @@ let rec expr_of_typ names quoter typ =
 
       (* select the approppriate fold_routines for arguments and pass them through *)
       let arg_folds = args |> List.map
-                        (fun ct -> match expr_of_typ ct with Some e -> ("", e) | None -> ("", fold_pass))
+                        (fun ct -> match expr_of_typ ct with Some e -> (Label.nolabel, e) | None -> (Label.nolabel, fold_pass))
       in
       if arg_folds = [] then Some [%expr [%e fold_fn] self] else
         Some [%expr [%e Exp.apply fold_fn arg_folds] self]
@@ -222,11 +234,29 @@ let process_decl quoter fold_arg_t
       (* create a default folder implementation for each variant *)
       let fields =
         constrs |>
-        List.map (fun { pcd_name; pcd_args = typs } ->
-            let folds = List.map (expr_of_typ names quoter) typs in
-            let pat = pat_tuple (opt_pattn folds) in
+        List.map (
+          fun { pcd_name; pcd_args } ->
+            (* Get a pattern and a corresponding folding-sequence from the constructor args *)
+            let (pat, folds) = match pcd_args with
+              (* Classic constructor arguments, we make up names *)
+                Pcstr_tuple typs ->
+                let appls = List.map (expr_of_typ names quoter) typs in
+                (pat_tuple (opt_pattn appls), List.combine (varn typs) appls)
+#if OCAML_VERSION >= (4, 03, 0)                                    
+              | Pcstr_record labels ->
+                (* New stuff, args have names themselves *)
+                let opt_pattl {pld_name = { txt = l } ; pld_type = typ} (ps,fs) =
+                  let fold = expr_of_typ names quoter typ in
+                  (** Filter unused variables on-the-fly *)
+                  match fold with None -> ((Pat.any ()) :: ps,fs)
+                                | Some _ -> ((pvar (argl l))::ps, (evar (argl l), fold)::fs)
+                in
+                let (ps, fs) = List.fold_right opt_pattl labels ([],[]) in                
+                (pat_tuple ps, fs)
+#endif               
+            in
             let subfield = Ppx_deriving.mangle_lid (`Prefix "fold") (Lident pcd_name.txt) in
-            (mknoloc subfield, [%expr fun self [%p pat] -> [%e reduce_fold_seq (List.combine (varn typs) folds)]]))
+            (mknoloc subfield, [%expr fun self [%p pat] -> [%e reduce_fold_seq folds]]))
       in
       (mknoloc (Lident on_var), (Exp.record fields None)) :: defaults
     | _ -> defaults
@@ -240,12 +270,20 @@ let process_decl quoter fold_arg_t
       *)
       let cases =
         constrs |>
-        List.map (fun { pcd_name; pcd_args = typs } ->
+        List.map (fun { pcd_name; pcd_args} ->
+            let (pat, vars) = match pcd_args with
+                Pcstr_tuple typs -> (pconstr pcd_name.txt (pattn typs), varn typs)
+#if OCAML_VERSION >= (4, 03, 0)                                    
+              | Pcstr_record labels ->
+                (pconstrrec pcd_name.txt (pattl labels),
+                 List.map (fun {pld_name = {txt=l}} -> evar (argl l)) labels)
+#endif
+            in
             let subfield = Ppx_deriving.mangle_lid (`Prefix "fold") (Lident pcd_name.txt) in
-            Exp.case (pconstr pcd_name.txt (pattn typs))
+            Exp.case (pat)
               (Exp.apply 
                      (Exp.field (Exp.field [%expr self] (mknoloc (Lident on_var))) (mknoloc subfield))
-                     ["", evar "self"; "", tuple (varn typs)]))
+                     [Label.nolabel, evar "self"; Label.nolabel, tuple vars]))
       in      
       [%expr fun self x -> [%e Exp.match_ [%expr x] cases]]                           
     | Ptype_record labels ->
@@ -282,8 +320,15 @@ let process_decl quoter fold_arg_t
         | ts -> [%type: ([%t fold_arg_t], [%t Typ.tuple ts]) fold_routine]
       in
       (* create the fold_fn signature for the rhs of a constructor *)
-      let typs_to_field { pcd_name; pcd_args = typs } =
-        Type.field (mknoloc ("fold_" ^ pcd_name.txt)) (merge_typs typs) in
+      let typs_to_field { pcd_name; pcd_args} =
+        let typs = 
+        match pcd_args with
+        Pcstr_tuple typs -> typs
+#if OCAML_VERSION >= (4, 03, 0)                                    
+        | Pcstr_record labels -> List.map (fun {pld_type} -> pld_type) labels
+#endif
+        in Type.field (mknoloc ("fold_" ^ pcd_name.txt)) (merge_typs typs)
+      in
       
       let fields = constrs |> List.map typs_to_field in
       ( (Type.field (mknoloc field_name) [%type: ([%t fold_arg_t], [%t folded]) fold_routine])::
@@ -307,7 +352,8 @@ let process_decl quoter fold_arg_t
 
 let folder_to_str fold_arg_t {names; defaults; sub_folders; folder_fields} =
   [
-    (Str.type_ (
+    (Str.type_ STR_TYPE_RECURSIVE
+       (
         Type.mk
           ~params:[fold_arg_t, Invariant]
           ~kind:(Ptype_record folder_fields) (mknoloc "fold_routines") ::

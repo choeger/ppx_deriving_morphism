@@ -25,6 +25,12 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  *)
+#if OCAML_VERSION < (4, 03, 0)
+#define STR_TYPE_RECURSIVE 
+#define Pcstr_tuple(core_types) core_types
+#else
+#define STR_TYPE_RECURSIVE Recursive
+#endif
 
 (** Generate mapper-record(s) for a given type. 
 
@@ -113,6 +119,8 @@ let attr_map attrs =
 
 let argn =
   Printf.sprintf "arg%d"
+let argl =
+  Printf.sprintf "arg%s"
 
 let opt_pattn maps =
   List.mapi (fun i e -> match e with Some _ -> pvar (argn i) | None -> Pat.any ()) maps
@@ -120,6 +128,11 @@ let opt_pattn maps =
 let pattn typs =
   List.mapi (fun i _ -> pvar (argn i)) typs
 
+let pattl labels = List.map (fun { pld_name = { txt = n } } -> n, pvar (argl n)) labels
+
+let pconstrrec name fields = pconstr name [precord ~closed:Closed fields]
+let constrrec name fields = constr name [record fields]
+    
 let varn typs =
   List.mapi (fun i _ -> evar (argn i)) typs
 
@@ -156,10 +169,19 @@ let reduce_map_seq ets =
     | (x,None) :: es -> reduce_ (x::ds) es
   in
   
-  match reduce_ [] ets with
-    [] -> None
-  | [e] -> Some e
-  | es -> Some (Exp.tuple es)
+  reduce_ [] ets 
+
+let reduce_record_map_seq ets =
+  (* Reduce a set of mapped arguments from record labels by applying all map-routines and create a tuple *)
+  let rec reduce_ ds = function
+    (* For each argument with a map-routine, apply that routine *)
+      [] -> List.rev ds
+    | (x,Some f) :: es -> reduce_ ((x, [%expr [%e f] [%e (evar (argl x))]])::ds) es
+    | (x,None) :: es -> reduce_ ((x, evar (argl x))::ds) es
+  in
+  
+  reduce_ [] ets 
+
 
 (* generate the map routine for a given type. 
    In case of unknown types, returns None
@@ -189,8 +211,8 @@ let rec expr_of_typ names quoter typ =
       let maps = List.map expr_of_typ typs in
       let pat = pat_tuple (pattn maps) in
       let map = match reduce_map_seq (List.combine (varn typs) maps) with
-          Some e -> e
-        | None -> raise (Failure "Tuple invariant broken")
+          e::es -> tuple (e::es)
+        | [] -> raise (Failure "Tuple invariant broken")
       in
       Some [%expr fun [%p pat] -> [%e map]]
       
@@ -202,7 +224,7 @@ let rec expr_of_typ names quoter typ =
 
       (* select the approppriate map_routines for arguments and pass them through *)
       let arg_maps = args |> List.map
-                       (fun ct -> match expr_of_typ ct with Some e -> ("", e) | None -> ("", map_pass))
+                       (fun ct -> match expr_of_typ ct with Some e -> (Label.nolabel, e) | None -> (Label.nolabel, map_pass))
       in
       if arg_maps = [] then Some [%expr [%e map_fn] self] else
         Some [%expr [%e Exp.apply map_fn arg_maps] self]
@@ -230,16 +252,19 @@ let process_decl quoter
       (* create a default mapper implementation for each variant *)
       let fields =
         constrs |>
-        List.map (fun { pcd_name; pcd_args = typs } ->
-            let maps = List.map (expr_of_typ names quoter) typs in
-            let pat = pat_tuple (pattn maps) in
+        List.map (fun { pcd_name; pcd_args } ->            
+            let (pat, rhs) = match pcd_args with              
+                Pcstr_tuple typs ->
+                let maps = List.map (expr_of_typ names quoter) typs in
+                (pat_tuple (pattn maps), constr pcd_name.txt (reduce_map_seq (List.combine (varn typs) maps)))
+#if OCAML_VERSION >= (4, 03, 0)                                    
+              | Pcstr_record labels ->
+                let map_seq = List.map (fun {pld_name = {txt=l}; pld_type} -> (l, expr_of_typ names quoter pld_type)) labels in
+                (pat_tuple (List.map (fun {pld_name={txt=l}} -> pvar (argl l)) labels), constrrec pcd_name.txt (reduce_record_map_seq map_seq))
+#endif
+            in
             let subfield = Ppx_deriving.mangle_lid (`Prefix "map") (Lident pcd_name.txt) in
-            (mknoloc subfield, [%expr fun self [%p pat] ->
-                     [%e
-                       (Exp.construct
-                          {pcd_name with txt=Lident pcd_name.txt}
-                          (reduce_map_seq (List.combine (varn typs) maps)))]
-              ]))
+            (mknoloc subfield, [%expr fun self [%p pat] -> [%e rhs]]))
       in
       (mknoloc (Lident on_var), (Exp.record fields None)) :: defaults
     | _ -> defaults
@@ -253,14 +278,22 @@ let process_decl quoter
       *)
       let cases =
         constrs |>
-        List.map (fun { pcd_name; pcd_args = typs } ->
+        List.map (fun { pcd_name; pcd_args } ->
             let subfield = Ppx_deriving.mangle_lid (`Prefix "map") (Lident pcd_name.txt) in
-            Exp.case (pconstr pcd_name.txt (pattn typs))
+            let (pat, mk) = match pcd_args with
+                Pcstr_tuple typs -> ((pconstr pcd_name.txt (pattn typs)), tuple (varn typs))
+#if OCAML_VERSION >= (4, 03, 0)                                    
+              | Pcstr_record labels ->
+                (pconstrrec pcd_name.txt (pattl labels),
+                 tuple (List.map (fun {pld_name = { txt = l } } -> evar (argl l)) labels))
+#endif
+            in
+            Exp.case pat
               (Exp.apply 
                  (Exp.field
                     (Exp.field [%expr self] (mknoloc (Lident on_var)))
                     (mknoloc subfield))
-                 ["", evar "self"; "", tuple (varn typs)]))
+                 [Label.nolabel, evar "self"; Label.nolabel, mk]))
       in      
       [%expr fun self x -> [%e Exp.match_ [%expr x] cases]]                           
     | Ptype_record labels ->
@@ -272,7 +305,7 @@ let process_decl quoter
             ({pld_name with txt = Lident pld_name.txt}, 
              match expr_of_typ names quoter pld_type with
                None -> evar pld_name.txt
-             | Some map -> Exp.apply map ["", evar pld_name.txt]
+             | Some map -> Exp.apply map [Label.nolabel, evar pld_name.txt]
             )
         end                  
       in
@@ -312,7 +345,14 @@ let process_decl quoter
       in
       
       (* create the map_fn signature for the rhs of a constructor *)
-      let typs_to_field { pcd_name; pcd_args = typs } =
+      let typs_to_field { pcd_name; pcd_args} =
+        let typs = 
+          match pcd_args with
+            Pcstr_tuple typs -> typs
+#if OCAML_VERSION >= (4, 03, 0)                                    
+          | Pcstr_record labels -> List.map (fun {pld_type} -> pld_type) labels
+#endif
+        in         
         Type.field (mknoloc ("map_" ^ pcd_name.txt)) (merge_typs typs) in
       
       let fields = constrs |> List.map typs_to_field in
@@ -336,7 +376,7 @@ let process_decl quoter
 
 let mapper_to_str {names; defaults; sub_mappers; mapper_fields} =
   [
-    (Str.type_ (
+    (Str.type_ STR_TYPE_RECURSIVE (
         Type.mk
           ~kind:(Ptype_record mapper_fields) (mknoloc "map_routines") ::
         Type.mk

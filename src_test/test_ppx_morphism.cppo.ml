@@ -114,6 +114,60 @@ module Test2 = struct
 
 end
 
+#if OCAML_VERSION >= (4, 03, 0)                                    
+module ConstrRecordTest = struct
+  (** Basic use case: free variables of a simple lambda calculus, using the new constructor arguments *)
+
+  type expr = Abs of {abs_var : string; abs_rhs : expr}
+            | App of {lhs : expr; rhs : expr}
+            | Let of {let_var : string; let_bdy : expr; let_rhs : expr}
+            | Int of int
+            | Sel of {what : string; from : expr}
+            | Var of string
+    [@@deriving folder, mapper]  
+
+  let (%>) f g x = g (f x)
+
+  let dispatch_expr =
+    { identity_folder.dispatch_expr with fold_Var = (fun self -> cons) ;
+                                         fold_Let = (fun self (let_var, let_bdy, let_rhs) ->
+                                             self.fold_expr self let_bdy %>
+                                             filter let_var %>
+                                             self.fold_expr self let_rhs ) ;
+                                         fold_Abs = (fun self (abs_var, abs_rhs) -> self.fold_expr self abs_rhs %> (filter abs_var));
+    }
+  
+  let fv_folder = { identity_folder with dispatch_expr }
+
+  let fv e = fv_folder.fold_expr fv_folder e []
+
+  let dispatch_expr = { identity_mapper.dispatch_expr with
+                        map_Var = (fun _ x -> Var (String.uppercase x));
+                        map_Abs = (fun self (abs_var, abs_rhs) -> Abs {abs_rhs = self.map_expr self abs_rhs ;
+                                                                       abs_var = String.uppercase abs_var } ) ;
+                        map_Let = (fun self (let_var, let_bdy, let_rhs) -> Let {let_var = String.uppercase let_var;
+                                                                                let_bdy = self.map_expr self let_bdy;
+                                                                                let_rhs = self.map_expr self let_rhs } ); 
+                      }
+  let upper_case_mapper = { identity_mapper with dispatch_expr }
+
+  let upper_case = upper_case_mapper.map_expr upper_case_mapper 
+
+  let test ctxt = 
+    assert_equal ~printer:show_fvs ["x"] (fv (Var "x")) ;
+    assert_equal ~printer:show_fvs ["x"] (fv (Sel {from=Var "x";what="foo"})) ;
+    assert_equal ~printer:show_fvs ["x"] (fv (Abs {abs_var="y"; abs_rhs = App {lhs = Var "x"; rhs = Var "y"}})) ;
+    assert_equal ~printer:show_fvs [] (fv (Let {let_var="x"; let_rhs=Int 0; let_bdy=Abs {abs_var="y"; abs_rhs = App {lhs = Var "x"; rhs = Var "y"}}})) 
+
+  let test_mapper ctxt =
+    assert_equal ~printer:show_fvs ["X"] (fv (upper_case (Var "x"))) ;    
+    assert_equal ~printer:show_fvs ["X"] (fv (upper_case (Sel {from=Var "x"; what="foo"}))) ;
+    assert_equal ~printer:show_fvs ["X"] (fv (upper_case (Abs {abs_var="y"; abs_rhs = App {lhs = Var "x"; rhs = Var "y"}}))) ;
+    assert_equal ~printer:show_fvs [] (fv (upper_case (Let {let_var="x"; let_rhs=Int 0; let_bdy=Abs {abs_var="y"; abs_rhs = App {lhs = Var "x"; rhs = Var "y"}}}))) 
+
+end
+#endif
+
 module PolyTest = struct
   (** Somewhat more complicated: reuse binding structure *)
 
@@ -173,6 +227,7 @@ module PolyTest = struct
                                    bdy= App {lhs = Var "a"; arg = Var "b"}}}))) 
 
 end
+
 
 module PolyRecTest = struct
   (** Even more complicated, reuse pairing structure *)
@@ -300,6 +355,10 @@ let suite = "Test ppx_morphism" >::: [
     "test zero mapper" >:: Test1.test_zero ;
     "test fv" >:: Test2.test ;
     "test uppercase mapper" >:: Test2.test_mapper ;
+#if OCAML_VERSION >= (4, 03, 0)                                    
+    "test record fv" >:: ConstrRecordTest.test ;
+    "test record uppercase mapper" >:: ConstrRecordTest.test_mapper ;
+#endif
     "test poly fv" >:: PolyTest.test ;
     "test poly mapper" >:: PolyTest.test_mapper ;
     "test poly recursive fv" >:: PolyRecTest.test ;    
