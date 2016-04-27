@@ -27,7 +27,7 @@
  *)
 
 open OUnit2
-    
+
 let fold_int _ x sum = x + sum
 
 module Test1 = struct
@@ -35,7 +35,7 @@ module Test1 = struct
   type foo = {x : int; y : int} 
 
   and bar = { lhs : baz; rhs : foo}
-            
+
   and baz = Foo of foo | Bar of bar [@@deriving folder,mapper]
 
   let sum = { identity_folder with fold_foo = (fun self {x;y} z -> x + y + z) } 
@@ -43,7 +43,7 @@ module Test1 = struct
   let test_int_record ctxt =
     assert_equal ~printer:string_of_int 3 (sum.fold_foo sum {x=2;y=1} 0) ;
     assert_equal ~printer:string_of_int 42 (sum.fold_baz sum (Bar {lhs=Foo{x=1;y=1}; rhs={x=0;y=40}}) 0)
-      
+
   let float_sum = { identity_folder with fold_foo = (fun self {x;y} z -> (float_of_int x) +. (float_of_int y) +. z) }
 
   let test_float_record ctxt =
@@ -63,7 +63,7 @@ let cons x xs = x::xs
 
 module Test2 = struct
   (** Basic use case: free variables of a simple lambda calculus *)
-  
+
   type expr = Abs of abs
             | App of app
             | Let of let_
@@ -84,12 +84,12 @@ module Test2 = struct
                                              self.fold_expr self let_bdy %>
                                              filter let_var %>
                                              self.fold_expr self let_rhs ) ;
-                                         on_expr = { identity_folder.on_expr with fold_Var = (fun self -> cons) }
+                                         dispatch_expr = { identity_folder.dispatch_expr with fold_Var = (fun self -> cons) }
                   }
 
   let fv e = fv_folder.fold_expr fv_folder e []
 
-  let upper_case_mapper = { identity_mapper with on_expr = { identity_mapper.on_expr with map_Var = fun _ x -> Var (String.uppercase x) ;} ;
+  let upper_case_mapper = { identity_mapper with dispatch_expr = { identity_mapper.dispatch_expr with map_Var = fun _ x -> Var (String.uppercase x) ;} ;
                                                  map_abs = ( fun self {abs_var; abs_rhs} -> {abs_rhs = self.map_expr self abs_rhs ;
                                                                                              abs_var = String.uppercase abs_var } ) ;
                                                  map_let_= ( fun self {let_var; let_bdy; let_rhs} ->
@@ -99,7 +99,7 @@ module Test2 = struct
                           }
 
   let upper_case = upper_case_mapper.map_expr upper_case_mapper 
-  
+
   let test ctxt = 
     assert_equal ~printer:show_fvs ["x"] (fv (Var "x")) ;
     assert_equal ~printer:show_fvs ["x"] (fv (Sel (Var "x", "foo"))) ;
@@ -111,22 +111,22 @@ module Test2 = struct
     assert_equal ~printer:show_fvs ["X"] (fv (upper_case (Sel (Var "x", "foo")))) ;
     assert_equal ~printer:show_fvs ["X"] (fv (upper_case (Abs {abs_var="y"; abs_rhs = App {lhs = Var "x"; rhs = Var "y"}}))) ;
     assert_equal ~printer:show_fvs [] (fv (upper_case (Let {let_var="x"; let_rhs=Int 0; let_bdy=Abs {abs_var="y"; abs_rhs = App {lhs = Var "x"; rhs = Var "y"}}}))) 
-    
+
 end
 
 module PolyTest = struct
   (** Somewhat more complicated: reuse binding structure *)
-  
+
   type expr = Abs of unit binding
             | App of app
             | Let of expr binding
             | Var of string
             | Int of int
-  
+
   and app = { lhs : expr; arg : expr }
 
   and 'a binding = { var : string ; rhs : 'a; bdy : expr }
-                   [@@deriving folder,mapper]
+    [@@deriving folder,mapper]
 
   let filter x fvs = List.filter (fun y -> not (y = x)) fvs
   let cons x xs = x::xs
@@ -138,16 +138,16 @@ module PolyTest = struct
                          self.fold_expr self bdy %>
                          filter var %>
                          f rhs ) ;
-                    on_expr = { identity_folder.on_expr with fold_Var = (fun self -> cons) }
+                    dispatch_expr = { identity_folder.dispatch_expr with fold_Var = (fun self -> cons) }
                   }
 
   let upper_case_mapper = { identity_mapper with
                             map_binding = (fun f self {var;rhs;bdy} -> {var=String.uppercase var; rhs=f rhs; bdy=self.map_expr self bdy}) ;
-                            on_expr = { identity_mapper.on_expr with map_Var = fun _ x -> Var (String.uppercase x) ; } ;
+                            dispatch_expr = { identity_mapper.dispatch_expr with map_Var = fun _ x -> Var (String.uppercase x) ; } ;
                           }
 
   let upper_case = upper_case_mapper.map_expr upper_case_mapper 
-    
+
   let fv e = fv_folder.fold_expr fv_folder e []
 
   let test ctxt = 
@@ -176,7 +176,7 @@ end
 
 module PolyRecTest = struct
   (** Even more complicated, reuse pairing structure *)
-  
+
   type expr = Abs of abs_binding
             | App of (expr,expr) pair
             | Let of expr binding
@@ -184,33 +184,33 @@ module PolyRecTest = struct
             | Int of my_int
 
   and my_int = int
-  
+
   and ('a,'b) pair = { lhs : 'a ; rhs : 'b }
 
   and abs_binding = unit binding
-  
+
   and 'a binding = { var : string ; terms : (expr, 'a) pair }
     [@@deriving folder,mapper]
 
   let (%>) f g x = g (f x)
   let fv_folder = { identity_folder with
-                  fold_binding =
-                    (fun f self {var;terms={rhs;lhs}} ->
-                      self.fold_expr self lhs %>
-                      filter var %>
-                      f rhs ) ;
-                  on_expr = { identity_folder.on_expr with fold_Var = (fun self -> cons) }
-                }
-  
+                    fold_binding =
+                      (fun f self {var;terms={rhs;lhs}} ->
+                         self.fold_expr self lhs %>
+                         filter var %>
+                         f rhs ) ;
+                    dispatch_expr = { identity_folder.dispatch_expr with fold_Var = (fun self -> cons) }
+                  }
+
   let fv e = fv_folder.fold_expr fv_folder e []
 
   let upper_case_mapper = { identity_mapper with
                             map_binding = (fun f self {var;terms={rhs;lhs}} -> {var=String.uppercase var; terms={rhs=f rhs; lhs=self.map_expr self lhs}}) ;
-                            on_expr = { identity_mapper.on_expr with map_Var = fun _ x -> Var (String.uppercase x) ; } ;
+                            dispatch_expr = { identity_mapper.dispatch_expr with map_Var = fun _ x -> Var (String.uppercase x) ; } ;
                           }
 
   let upper_case = upper_case_mapper.map_expr upper_case_mapper 
-  
+
   let test ctxt = 
     assert_equal ~printer:show_fvs ["z"] (fv (Var "z")) ;
     assert_equal ~printer:show_fvs ["t"]
@@ -253,7 +253,7 @@ module TupleTest = struct
   and foo = children * tree option
   and tree = node option
     [@@deriving folder,mapper,show]
-    
+
   let insertion_mapper n = {identity_mapper with
                             map_node =
                               (fun self (Node (m,(left,right))) ->
@@ -270,7 +270,7 @@ module TupleTest = struct
 
   let incr_mapper = {identity_mapper with
                      (* Node vs. node test *)
-                     on_node = {
+                     dispatch_node = {
                        map_Node = (fun self (n,children) -> Node (n + 1, self.map_children self children))
                      };
                     }
@@ -278,20 +278,20 @@ module TupleTest = struct
   let inc = incr_mapper.map_tree incr_mapper
 
   let sum_folder = {identity_folder with
-                    on_node = {
+                    dispatch_node = {
                       fold_Node = (fun self (n,children) sum -> self.fold_children self children (n + sum)) ;
                     }
                    }
 
   let sum t = sum_folder.fold_tree sum_folder t 0
-  
+
   let test_mapper ctxt =
     assert_equal ~printer:show_tree (Some (Node (2, (Some (Node (1, (None, None))), None)))) (insert 1 (insert 2 None)) ;
     assert_equal ~printer:show_tree (Some (Node (3, (Some (Node (2, (None, None))), None)))) (inc (insert 1 (insert 2 None))) 
 
   let test_folder ctxt =
     assert_equal ~printer:string_of_int 5 (sum (inc (insert 1 (insert 2 None))))
-                                   
+
 end
 
 let suite = "Test ppx_morphism" >::: [

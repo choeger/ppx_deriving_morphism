@@ -224,7 +224,7 @@ let process_decl quoter
   let field_name = Ppx_deriving.mangle_type_decl (`Prefix "map") type_decl in
 
   (* create a default implementation (i.e. do nothing but walk the structure) *)
-  let on_var = Ppx_deriving.mangle_type_decl (`Prefix "on") type_decl in
+  let on_var = Ppx_deriving.mangle_type_decl (`Prefix "dispatch") type_decl in
   let defaults = match type_decl.ptype_kind with
     | Ptype_variant constrs ->
       (* create a default mapper implementation for each variant *)
@@ -303,7 +303,7 @@ let process_decl quoter
   let (mapper_fields, sub_mappers) = match type_decl.ptype_kind with
     | Ptype_variant constrs ->
       (* The mapper of a variant type is a record with one map-routine for each variant *)
-      let sub_mapper_name = Ppx_deriving.mangle_type_decl (`Prefix "on") type_decl in
+      let sub_mapper_name = Ppx_deriving.mangle_type_decl (`Prefix "dispatch") type_decl in
       
       let merge_typs = function
           [] -> [%type: (unit, [%t mapped]) map_routine]
@@ -338,10 +338,10 @@ let mapper_to_str {names; defaults; sub_mappers; mapper_fields} =
   [
     (Str.type_ (
         Type.mk
-          ~kind:(Ptype_record mapper_fields) (mknoloc "mapper") ::
+          ~kind:(Ptype_record mapper_fields) (mknoloc "map_routines") ::
         Type.mk
           ~params:[tvar "a", Invariant; tvar "b", Invariant]
-          ~manifest:[%type: mapper -> 'a -> 'b] (mknoloc "map_routine") ::
+          ~manifest:[%type: map_routines -> 'a -> 'b] (mknoloc "map_routine") ::
 
         sub_mappers
       )) ;    

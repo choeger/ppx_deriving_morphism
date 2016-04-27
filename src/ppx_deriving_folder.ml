@@ -216,7 +216,7 @@ let process_decl quoter fold_arg_t
   let field_name = Ppx_deriving.mangle_type_decl (`Prefix "fold") type_decl in
 
   (* create a default implementation (i.e. do nothing but walk the structure) *)
-  let on_var = Ppx_deriving.mangle_type_decl (`Prefix "on") type_decl in
+  let on_var = Ppx_deriving.mangle_type_decl (`Prefix "dispatch") type_decl in
   let defaults = match type_decl.ptype_kind with
     | Ptype_variant constrs ->
       (* create a default folder implementation for each variant *)
@@ -275,7 +275,7 @@ let process_decl quoter fold_arg_t
   let (folder_fields, sub_folders) = match type_decl.ptype_kind with
     | Ptype_variant constrs ->
       (* The folder of a variant type is a record with one fold-routine for each variant *)
-      let sub_folder_name = Ppx_deriving.mangle_type_decl (`Prefix "on") type_decl in
+      let sub_folder_name = Ppx_deriving.mangle_type_decl (`Prefix "dispatch") type_decl in
       let merge_typs = function
           [] -> [%type: ([%t fold_arg_t], unit) fold_routine]
         | [t] -> [%type: ([%t fold_arg_t], [%t t]) fold_routine]
@@ -310,10 +310,10 @@ let folder_to_str fold_arg_t {names; defaults; sub_folders; folder_fields} =
     (Str.type_ (
         Type.mk
           ~params:[fold_arg_t, Invariant]
-          ~kind:(Ptype_record folder_fields) (mknoloc "folder") ::
+          ~kind:(Ptype_record folder_fields) (mknoloc "fold_routines") ::
         Type.mk
           ~params:[tvar "a", Invariant; tvar "b", Invariant]
-          ~manifest:[%type: 'a folder -> 'b -> 'a -> 'a] (mknoloc "fold_routine") ::
+          ~manifest:[%type: 'a fold_routines -> 'b -> 'a -> 'a] (mknoloc "fold_routine") ::
         sub_folders
       )) ;    
     (Str.value Nonrecursive [Vb.mk (pvar "identity_folder") (Exp.record defaults None)]) ;
