@@ -232,7 +232,7 @@ end
 module PolyRecTest = struct
   (** Even more complicated, reuse pairing structure *)
 
-  type expr = Abs of abs_binding
+  type expr = Abs of abs_binding            
             | App of (expr,expr) pair
             | Let of expr binding
             | Var of string

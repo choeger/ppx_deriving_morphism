@@ -1,6 +1,6 @@
 opam-version: "1.2"
 name: "ppx_deriving_morphism"
-version: "0.3"
+version: "0.4"
 maintainer: "Christoph Höger <christoph.hoeger@tu-berlin.de>"
 authors: [ "Christoph Höger <christoph.hoeger@tu-berlin.de>" ]
 license: "BSD"
@@ -17,7 +17,7 @@ build-test: [
   "ocamlbuild" "-classic-display" "-use-ocamlfind" "src_test/test_ppx_morphism.byte" "--"
 ]
 depends: [
-  "ppx_deriving" {>= "3.0" & < "4.0" }
+  "ppx_deriving" {>= "3.0" & < "5.0" }
   "ppx_tools" {>= "4.02.3"}
   "ocamlfind"    {build}
   "cppo"       {build}
