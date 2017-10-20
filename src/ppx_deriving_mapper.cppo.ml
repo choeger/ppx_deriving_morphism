@@ -26,30 +26,30 @@
  *
  *)
 #if OCAML_VERSION < (4, 03, 0)
-#define STR_TYPE_RECURSIVE 
+#define STR_TYPE_RECURSIVE
 #define Pcstr_tuple(core_types) core_types
 #else
 #define STR_TYPE_RECURSIVE Recursive
 #endif
 
-(** Generate mapper-record(s) for a given type. 
+(** Generate mapper-record(s) for a given type.
 
     A map-function takes the mapper (open recursion style)
-    and a value and yields a new value. 
-   
+    and a value and yields a new value.
+
     The mapper contains map-functions for each variant of the folded type, e.g.
 
     type t = Foo of foo | Bar of bar
- 
+
     and foo = { name : string ; wrapped : t }
-   
+
     and bar = Baz | Bax of int
 
     generates:
 
     type ('a,'b) map_fn = t_mapper -> 'a -> 'b
 
-    and mapper = { t : t_mapper ; 
+    and mapper = { t : t_mapper ;
                    bar : bar_mapper;
     }
 
@@ -59,24 +59,24 @@
     and bar_mapper = { map_Baz : (unit, bar) map_fn ;
                        map_Bax : (int, bar) map_fn }
 
-    let map_t self = function 
+    let map_t self = function
       | Foo foo -> self.t.map_Foo self foo
       | Bar bar -> self.t.map_Bar self bar
 
-    let map_bar self = function 
+    let map_bar self = function
       | Baz -> self.bar.map_Bar self ()
       | Bax i -> self.bar.map_Bax self i
 
     let identity_t_mapper = {
         map_Foo = fun self x -> Foo {x with wrapped = map_t self wrapped}
-        map_Bar = fun self x -> Bar (map_bar self x)  
+        map_Bar = fun self x -> Bar (map_bar self x)
     }
 
     let identity_bar_mapper = {
         map_Baz = fun self () -> Baz
         map_Bax = fun self x -> Bax x
     }
-   
+
     let identity_mapper = { t = identity_t_mapper ; bar = identity_bar_mapper }
 *)
 
@@ -87,7 +87,7 @@ open Parsetree
 open Ast_helper
 open Ast_convenience
 open Ppx_deriving
-    
+
 let deriver = "mapper"
 let raise_errorf = Ppx_deriving.raise_errorf
 
@@ -97,10 +97,10 @@ type mapper = {
 
   (* fields *)
   mapper_fields : label_declaration list;
-  
+
   (* variant mapper *)
   sub_mappers : type_declaration list;
-  
+
   (* map dispatchers *)
   defaults : (Longident.t Location.loc * expression) list ;
 }
@@ -132,7 +132,7 @@ let pattl labels = List.map (fun { pld_name = { txt = n } } -> n, pvar (argl n))
 
 let pconstrrec name fields = pconstr name [precord ~closed:Closed fields]
 let constrrec name fields = constr name [record fields]
-    
+
 let varn typs =
   List.mapi (fun i _ -> evar (argn i)) typs
 
@@ -168,8 +168,8 @@ let reduce_map_seq ets =
     | (x,Some f) :: es -> reduce_ ([%expr [%e f] [%e x]]::ds) es
     | (x,None) :: es -> reduce_ (x::ds) es
   in
-  
-  reduce_ [] ets 
+
+  reduce_ [] ets
 
 let reduce_record_map_seq ets =
   (* Reduce a set of mapped arguments from record labels by applying all map-routines and create a tuple *)
@@ -179,11 +179,11 @@ let reduce_record_map_seq ets =
     | (x,Some f) :: es -> reduce_ ((x, [%expr [%e f] [%e (evar (argl x))]])::ds) es
     | (x,None) :: es -> reduce_ ((x, evar (argl x))::ds) es
   in
-  
-  reduce_ [] ets 
+
+  reduce_ [] ets
 
 
-(* generate the map routine for a given type. 
+(* generate the map routine for a given type.
    In case of unknown types, returns None
 *)
 let rec expr_of_typ names quoter typ =
@@ -215,9 +215,9 @@ let rec expr_of_typ names quoter typ =
         | [] -> raise (Failure "Tuple invariant broken")
       in
       Some [%expr fun [%p pat] -> [%e map]]
-      
-    (* A known constructor (i.e. the name appears in the names arg) 
-       We expect a map_<t> function to exist 
+
+    (* A known constructor (i.e. the name appears in the names arg)
+       We expect a map_<t> function to exist
     *)
     | { ptyp_desc = Ptyp_constr ({ txt = (Lident name) }, args) } when List.mem name names ->
       let map_fn = Exp.field (evar "self") (mknoloc (Ppx_deriving.mangle_lid (`Prefix "map") (Lident name))) in
@@ -229,7 +229,7 @@ let rec expr_of_typ names quoter typ =
       if arg_maps = [] then Some [%expr [%e map_fn] self] else
         Some [%expr [%e Exp.apply map_fn arg_maps] self]
     | _ -> None
-      
+
 let rec gather_vars_ct vars = function
   | ({ptyp_desc=Ptyp_var x},_) :: cts -> gather_vars_ct (x::vars) cts
   | _ :: cts -> gather_vars_ct vars cts
@@ -239,7 +239,7 @@ and gather_vars vars decl = gather_vars_ct vars decl.ptype_params
 
 let polymorphize ct =
   [%type: [%t ct] -> [%t ct]]
-                       
+
 let process_decl quoter
     {names;sub_mappers;defaults;mapper_fields}
     ({ ptype_loc = loc } as type_decl) =
@@ -252,12 +252,12 @@ let process_decl quoter
       (* create a default mapper implementation for each variant *)
       let fields =
         constrs |>
-        List.map (fun { pcd_name; pcd_args } ->            
-            let (pat, rhs) = match pcd_args with              
+        List.map (fun { pcd_name; pcd_args } ->
+            let (pat, rhs) = match pcd_args with
                 Pcstr_tuple(typs) ->
                 let maps = List.map (expr_of_typ names quoter) typs in
                 (pat_tuple (pattn maps), constr pcd_name.txt (reduce_map_seq (List.combine (varn typs) maps)))
-#if OCAML_VERSION >= (4, 03, 0)                                    
+#if OCAML_VERSION >= (4, 03, 0)
               | Pcstr_record labels ->
                 let map_seq = List.map (fun {pld_name = {txt=l}; pld_type} -> (l, expr_of_typ names quoter pld_type)) labels in
                 (pat_tuple (List.map (fun {pld_name={txt=l}} -> pvar (argl l)) labels), constrrec pcd_name.txt (reduce_record_map_seq map_seq))
@@ -273,8 +273,8 @@ let process_decl quoter
   let default_var = Ppx_deriving.mangle_type_decl (`Prefix "map") type_decl in
   let default_map = match type_decl.ptype_kind with
     |  Ptype_variant constrs ->
-      (* create a new dispatcher for a variant type 
-         call the appropriate map-method (see above) 
+      (* create a new dispatcher for a variant type
+         call the appropriate map-method (see above)
       *)
       let cases =
         constrs |>
@@ -282,32 +282,32 @@ let process_decl quoter
             let subfield = Ppx_deriving.mangle_lid (`Prefix "map") (Lident pcd_name.txt) in
             let (pat, mk) = match pcd_args with
                 Pcstr_tuple(typs) -> ((pconstr pcd_name.txt (pattn typs)), tuple (varn typs))
-#if OCAML_VERSION >= (4, 03, 0)                                    
+#if OCAML_VERSION >= (4, 03, 0)
               | Pcstr_record labels ->
                 (pconstrrec pcd_name.txt (pattl labels),
                  tuple (List.map (fun {pld_name = { txt = l } } -> evar (argl l)) labels))
 #endif
             in
             Exp.case pat
-              (Exp.apply 
+              (Exp.apply
                  (Exp.field
                     (Exp.field [%expr self] (mknoloc (Lident on_var)))
                     (mknoloc subfield))
                  [Label.nolabel, evar "self"; Label.nolabel, mk]))
-      in      
-      [%expr fun self x -> [%e Exp.match_ [%expr x] cases]]                           
+      in
+      [%expr fun self x -> [%e Exp.match_ [%expr x] cases]]
     | Ptype_record labels ->
       (* map all fields of a record *)
       let maps =
         labels |>
         List.map begin
           fun {pld_name; pld_type} ->
-            ({pld_name with txt = Lident pld_name.txt}, 
+            ({pld_name with txt = Lident pld_name.txt},
              match expr_of_typ names quoter pld_type with
                None -> evar pld_name.txt
              | Some map -> Exp.apply map [Label.nolabel, evar pld_name.txt]
             )
-        end                  
+        end
       in
       let pattern = Pat.record
           (labels |>
@@ -328,7 +328,7 @@ let process_decl quoter
   in
   let defaults = (mknoloc (Lident default_var), (poly_fun_of_type_decl type_decl default_map))::defaults in
 
-  let params = type_decl.ptype_params |> (List.map (fun (ct,_) -> ct)) in 
+  let params = type_decl.ptype_params |> (List.map (fun (ct,_) -> ct)) in
   let mapped = Typ.constr
       {type_decl.ptype_name with txt = Lident type_decl.ptype_name.txt}
       params in
@@ -337,32 +337,32 @@ let process_decl quoter
     | Ptype_variant constrs ->
       (* The mapper of a variant type is a record with one map-routine for each variant *)
       let sub_mapper_name = Ppx_deriving.mangle_type_decl (`Prefix "dispatch") type_decl in
-      
+
       let merge_typs = function
           [] -> [%type: (unit, [%t mapped]) map_routine]
         | [t] -> [%type: ([%t t], [%t  mapped]) map_routine]
         | ts -> [%type: ([%t Typ.tuple ts], [%t mapped]) map_routine]
       in
-      
+
       (* create the map_fn signature for the rhs of a constructor *)
       let typs_to_field { pcd_name; pcd_args} =
-        let typs = 
+        let typs =
           match pcd_args with
             Pcstr_tuple(typs) -> typs
-#if OCAML_VERSION >= (4, 03, 0)                                    
+#if OCAML_VERSION >= (4, 03, 0)
           | Pcstr_record labels -> List.map (fun {pld_type} -> pld_type) labels
 #endif
-        in         
+        in
         Type.field (mknoloc ("map_" ^ pcd_name.txt)) (merge_typs typs) in
-      
+
       let fields = constrs |> List.map typs_to_field in
       ( (Type.field (mknoloc field_name) [%type: ([%t mapped], [%t mapped]) map_routine])::
         (Type.field (mknoloc sub_mapper_name) (Typ.constr (mknoloc (Lident mapper_name)) []))::
-        mapper_fields, 
+        mapper_fields,
         (Type.mk
            ~kind:(Ptype_record fields) (mknoloc mapper_name))::sub_mappers )
     | _ ->
-      begin 
+      begin
         (* every other type in the group gets a map-routine *)
         let vars = gather_vars [] type_decl in
         let routine_t = (poly_arrow_of_type_decl polymorphize
@@ -384,10 +384,10 @@ let mapper_to_str {names; defaults; sub_mappers; mapper_fields} =
           ~manifest:[%type: map_routines -> 'a -> 'b] (mknoloc "map_routine") ::
 
         sub_mappers
-      )) ;    
+      )) ;
     (Str.value Nonrecursive [Vb.mk (pvar "identity_mapper") (Exp.record defaults None)]) ;
   ]
-  
+
 let str_of_type ~options ~path type_decls =
   parse_options options ;
 
@@ -397,10 +397,12 @@ let str_of_type ~options ~path type_decls =
   mapper_to_str mapper
 
 let register () =
-  Ppx_deriving.(register (create "mapper"                              
-                            ~type_decl_str: (fun ~options ~path type_decls ->
-                                str_of_type ~options ~path type_decls)
-                            () ))
-
+  match Ppx_deriving.lookup "mapper"
+  with None ->
+    Ppx_deriving.(register (create "mapper"
+                              ~type_decl_str: (fun ~options ~path type_decls ->
+                                  str_of_type ~options ~path type_decls)
+                              () ))
+     | _ -> ()
 
 let () = register ()

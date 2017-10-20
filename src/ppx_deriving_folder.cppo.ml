@@ -26,46 +26,46 @@
  *
  *)
 #if OCAML_VERSION < (4, 03, 0)
-#define STR_TYPE_RECURSIVE 
+#define STR_TYPE_RECURSIVE
 #define Pcstr_tuple(core_types) core_types
 #else
 #define STR_TYPE_RECURSIVE Recursive
 #endif
 
-(** Generate folder-record(s) for a given type. 
+(** Generate folder-record(s) for a given type.
 
-    A fold-function takes the folder (open recursion style), the element being folded, 
-    and a value and yields a new value. 
-   
+    A fold-function takes the folder (open recursion style), the element being folded,
+    and a value and yields a new value.
+
     The folder contains fold-functions for each variant of the folded type, e.g.
 
     type t = Foo of foo | Bar of bar
- 
+
     and foo = { name : string ; wrapped : t }
-   
+
     and bar = Baz | Bax of int
 
     generates:
 
     type ('a,'b) fold_fn = ('a t_folder) -> 'b -> 'a -> 'a
 
-    and 'a folder = { on_t : 'a t_folder ; 
-                      on_bar : 'a bar_folder 
+    and 'a folder = { on_t : 'a t_folder ;
+                      on_bar : 'a bar_folder
                     }
-    
+
     and 'a t_folder = { fold_foo : ('a,foo) fold_fn ;
                         fold_bar : ('a,bar) fold_fn }
 
     and 'a bar_folder = { fold_baz : ('a, unit) fold_fn ;
                           fold_bax : ('a, int) fold_fn }
 
-    let fold_t self = function 
+    let fold_t self = function
       | Foo foo -> self.t.fold_foo self foo
       | Bar bar -> self.t.fold_bar self bar
 
-    let fold_foo self {name; wrapped} = fold_t self wrapped        
+    let fold_foo self {name; wrapped} = fold_t self wrapped
 
-    let fold_bar self = function 
+    let fold_bar self = function
       | Baz -> self.bar.fold_bar ()
       | Bax i -> self.bar.fold_bax i
 
@@ -78,7 +78,7 @@
         fold_baz = fold_baz ;
         fold_bax = fold_bax ;
     }
-   
+
     let default_folder = { t = default_t_folder ; bar = default_bar_folder }
 *)
 
@@ -89,7 +89,7 @@ open Parsetree
 open Ast_helper
 open Ast_convenience
 open Ppx_deriving
-    
+
 let deriver = "folder"
 let raise_errorf = Ppx_deriving.raise_errorf
 
@@ -108,7 +108,7 @@ let argn =
   Printf.sprintf "arg%d"
 let argl =
   Printf.sprintf "arg%s"
-    
+
 let opt_pattn folds =
   List.mapi (fun i e -> match e with Some _ -> pvar (argn i) | None -> Pat.any ()) folds
 
@@ -156,7 +156,7 @@ and reduce_fold_seq2 e = function
   | (x,Some f) :: es -> reduce_fold_seq2 [%expr (fun f g x -> g (f x)) ([%e e]) ([%e f] [%e x])] es
   | (_, None) :: es -> reduce_fold_seq2 e es
 
-(* generate the fold routine for a given type. 
+(* generate the fold routine for a given type.
    Since we might be able to optimize it, in case of unknown types, returns None
    (the identity fold is only used when necessary) *)
 let rec expr_of_typ names quoter typ =
@@ -185,7 +185,7 @@ let rec expr_of_typ names quoter typ =
       Some [%expr fun [%p pat] -> [%e fold]]
 
     | { ptyp_desc = Ptyp_var x } ->
-      Some (Exp.ident (mknoloc (Lident ("poly_" ^ x))))      
+      Some (Exp.ident (mknoloc (Lident ("poly_" ^ x))))
     (* A known constructor (i.e. the name appears in the names arg) *)
     | { ptyp_desc = Ptyp_constr ({ txt = (Lident name) }, args) } when List.mem name names ->
       let fold_fn = Exp.field (evar "self") (mknoloc (Ppx_deriving.mangle_lid (`Prefix "fold") (Lident name))) in
@@ -197,17 +197,17 @@ let rec expr_of_typ names quoter typ =
       if arg_folds = [] then Some [%expr [%e fold_fn] self] else
         Some [%expr [%e Exp.apply fold_fn arg_folds] self]
     | _ -> None
-      
+
 type folder = {
   (* all types in the recursive group *)
   names : string list ;
 
   (* fields *)
   folder_fields : label_declaration list;
-  
+
   (* variant folders *)
   sub_folders : type_declaration list;
-  
+
   (* folder dispatchers *)
   defaults : (Longident.t Location.loc * expression) list ;
 }
@@ -221,7 +221,7 @@ and gather_vars vars decl = gather_vars_ct vars decl.ptype_params
 
 let polymorphize arg ct =
   [%type: [%t ct] -> [%t arg] -> [%t arg]]
-      
+
 let process_decl quoter fold_arg_t
     {names;sub_folders;defaults;folder_fields}
     ({ ptype_loc = loc } as type_decl) =
@@ -242,7 +242,7 @@ let process_decl quoter fold_arg_t
                 Pcstr_tuple(typs) ->
                 let appls = List.map (expr_of_typ names quoter) typs in
                 (pat_tuple (opt_pattn appls), List.combine (varn typs) appls)
-#if OCAML_VERSION >= (4, 03, 0)                                    
+#if OCAML_VERSION >= (4, 03, 0)
               | Pcstr_record labels ->
                 (* New stuff, args have names themselves *)
                 let opt_pattl {pld_name = { txt = l } ; pld_type = typ} (ps,fs) =
@@ -251,9 +251,9 @@ let process_decl quoter fold_arg_t
                   match fold with None -> ((Pat.any ()) :: ps,fs)
                                 | Some _ -> ((pvar (argl l))::ps, (evar (argl l), fold)::fs)
                 in
-                let (ps, fs) = List.fold_right opt_pattl labels ([],[]) in                
+                let (ps, fs) = List.fold_right opt_pattl labels ([],[]) in
                 (pat_tuple ps, fs)
-#endif               
+#endif
             in
             let subfield = Ppx_deriving.mangle_lid (`Prefix "fold") (Lident pcd_name.txt) in
             (mknoloc subfield, [%expr fun self [%p pat] -> [%e reduce_fold_seq folds]]))
@@ -265,15 +265,15 @@ let process_decl quoter fold_arg_t
   let default_var = Ppx_deriving.mangle_type_decl (`Prefix "fold") type_decl in
   let default_fold = match type_decl.ptype_kind with
     |  Ptype_variant constrs ->
-      (* create a new dispatcher for a variant type 
-         call the appropriate fold-method (see above) 
+      (* create a new dispatcher for a variant type
+         call the appropriate fold-method (see above)
       *)
       let cases =
         constrs |>
         List.map (fun { pcd_name; pcd_args} ->
             let (pat, vars) = match pcd_args with
                 Pcstr_tuple(typs) -> (pconstr pcd_name.txt (pattn typs), varn typs)
-#if OCAML_VERSION >= (4, 03, 0)                                    
+#if OCAML_VERSION >= (4, 03, 0)
               | Pcstr_record labels ->
                 (pconstrrec pcd_name.txt (pattl labels),
                  List.map (fun {pld_name = {txt=l}} -> evar (argl l)) labels)
@@ -281,15 +281,15 @@ let process_decl quoter fold_arg_t
             in
             let subfield = Ppx_deriving.mangle_lid (`Prefix "fold") (Lident pcd_name.txt) in
             Exp.case (pat)
-              (Exp.apply 
+              (Exp.apply
                      (Exp.field (Exp.field [%expr self] (mknoloc (Lident on_var))) (mknoloc subfield))
                      [Label.nolabel, evar "self"; Label.nolabel, tuple vars]))
-      in      
-      [%expr fun self x -> [%e Exp.match_ [%expr x] cases]]                           
+      in
+      [%expr fun self x -> [%e Exp.match_ [%expr x] cases]]
     | Ptype_record labels ->
       let folds =
         labels |>
-        List.map (fun {pld_name; pld_type} -> 
+        List.map (fun {pld_name; pld_type} ->
             evar pld_name.txt, expr_of_typ names quoter pld_type)
       in
       [%expr fun self [%p Pat.record (labels |>
@@ -302,12 +302,12 @@ let process_decl quoter fold_arg_t
             | None -> lift_fold None
           end
         | None -> lift_fold None
-      end        
+      end
     | _ -> lift_fold None
   in
   let defaults = (mknoloc (Lident default_var), (poly_fun_of_type_decl type_decl default_fold))::defaults in
 
-  let params = type_decl.ptype_params |> (List.map (fun (ct,_) -> ct)) in 
+  let params = type_decl.ptype_params |> (List.map (fun (ct,_) -> ct)) in
   let folded =Typ.constr (mknoloc (Lident type_decl.ptype_name.txt)) params in
   let folder_name = Ppx_deriving.mangle_type_decl (`Suffix "folder") type_decl in
   let (folder_fields, sub_folders) = match type_decl.ptype_kind with
@@ -321,24 +321,24 @@ let process_decl quoter fold_arg_t
       in
       (* create the fold_fn signature for the rhs of a constructor *)
       let typs_to_field { pcd_name; pcd_args} =
-        let typs = 
+        let typs =
         match pcd_args with
         Pcstr_tuple(typs) -> typs
-#if OCAML_VERSION >= (4, 03, 0)                                    
+#if OCAML_VERSION >= (4, 03, 0)
         | Pcstr_record labels -> List.map (fun {pld_type} -> pld_type) labels
 #endif
         in Type.field (mknoloc ("fold_" ^ pcd_name.txt)) (merge_typs typs)
       in
-      
+
       let fields = constrs |> List.map typs_to_field in
       ( (Type.field (mknoloc field_name) [%type: ([%t fold_arg_t], [%t folded]) fold_routine])::
         (Type.field (mknoloc sub_folder_name) (Typ.constr (mknoloc (Lident folder_name)) [fold_arg_t]))::
-        folder_fields, 
+        folder_fields,
         (Type.mk
            ~params:[fold_arg_t, Invariant]
            ~kind:(Ptype_record fields) (mknoloc folder_name))::sub_folders )
     | _ ->
-      begin 
+      begin
         (* every other type in the group gets a fold-routine *)
         let vars = gather_vars [] type_decl in
         let routine_t = (poly_arrow_of_type_decl (polymorphize fold_arg_t)
@@ -361,14 +361,14 @@ let folder_to_str fold_arg_t {names; defaults; sub_folders; folder_fields} =
           ~params:[tvar "a", Invariant; tvar "b", Invariant]
           ~manifest:[%type: 'a fold_routines -> 'b -> 'a -> 'a] (mknoloc "fold_routine") ::
         sub_folders
-      )) ;    
+      )) ;
     (Str.value Nonrecursive [Vb.mk (pvar "identity_folder") (Exp.record defaults None)]) ;
   ]
-  
+
 let str_of_type ~options ~path type_decls =
   parse_options options ;
 
-  let type_vars = List.fold_left gather_vars [] type_decls in    
+  let type_vars = List.fold_left gather_vars [] type_decls in
   let fold_arg_t = tvar (fresh_var type_vars) in
   let quoter = Ppx_deriving.create_quoter () in
   let names = List.map (fun {ptype_name} -> ptype_name.txt) type_decls in
@@ -376,10 +376,12 @@ let str_of_type ~options ~path type_decls =
   folder_to_str fold_arg_t folder
 
 let register () =
-  Ppx_deriving.(register (create "folder"                              
-                            ~type_decl_str: (fun ~options ~path type_decls ->
-                                str_of_type ~options ~path type_decls)
-                            () ))
-
+  match Ppx_deriving.lookup "folder"
+  with None ->
+    Ppx_deriving.(register (create "folder"
+                              ~type_decl_str: (fun ~options ~path type_decls ->
+                                  str_of_type ~options ~path type_decls)
+                              () ))
+     | _ -> ()
 
 let () = register ()
