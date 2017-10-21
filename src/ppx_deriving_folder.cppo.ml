@@ -342,10 +342,17 @@ let process_decl quoter fold_arg_t
         (* every other type in the group gets a fold-routine *)
         let vars = gather_vars [] type_decl in
         let routine_t = (poly_arrow_of_type_decl (polymorphize fold_arg_t)
-                type_decl [%type: ([%t fold_arg_t], [%t folded]) fold_routine]) in
+                           type_decl [%type: ([%t fold_arg_t], [%t folded]) fold_routine]) in
+
+#if OCAML_VERSION >= (4, 05, 0)
         ( (Type.field (mknoloc field_name)
              (Typ.poly vars routine_t)
           ) :: folder_fields, sub_folders)
+#else
+          ( (Type.field (mknoloc field_name)
+             (Typ.poly (List.map mknoloc vars) routine_t)
+          ) :: folder_fields, sub_folders)
+#endif
       end
 
   in {names; sub_folders; defaults; folder_fields}
