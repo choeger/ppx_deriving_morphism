@@ -367,7 +367,8 @@ let process_decl quoter
         let vars = gather_vars [] type_decl in
         let routine_t = (poly_arrow_of_type_decl polymorphize
                 type_decl [%type: ([%t mapped], [%t mapped]) map_routine]) in
-#if OCAML_VERSION >= (4, 05, 0)
+
+#if OCAML_VERSION < (4, 05, 0)
         ( (Type.field (mknoloc field_name)
              (Typ.poly vars routine_t)
           ) :: mapper_fields, sub_mappers)

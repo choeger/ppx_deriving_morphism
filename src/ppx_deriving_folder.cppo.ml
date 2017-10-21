@@ -344,7 +344,7 @@ let process_decl quoter fold_arg_t
         let routine_t = (poly_arrow_of_type_decl (polymorphize fold_arg_t)
                            type_decl [%type: ([%t fold_arg_t], [%t folded]) fold_routine]) in
 
-#if OCAML_VERSION >= (4, 05, 0)
+#if OCAML_VERSION < (4, 05, 0)
         ( (Type.field (mknoloc field_name)
              (Typ.poly vars routine_t)
           ) :: folder_fields, sub_folders)
